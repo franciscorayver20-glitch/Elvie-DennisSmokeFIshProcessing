@@ -1,6 +1,12 @@
-{% extends "base.html" %} {% block title %}Home{% endblock %} {% block content
-%}
-<h1>Home Page</h1>
-<p>Select an option from the sidebar to begin.</p>
+{% extends "base.html" %}
 
+{% block title %}Home{% endblock %}
+
+{% block content %}
+    {% if current_user.is_authenticated %}
+        <h1>Welcome back, {{ current_user.first_name }}!</h1>
+    {% else %}
+        <h1>Welcome to Dennis & Elvie Smoke Fish Processing</h1>
+    {% endif %}
+    <p>Select an option from the sidebar to begin.</p>
 {% endblock %}
