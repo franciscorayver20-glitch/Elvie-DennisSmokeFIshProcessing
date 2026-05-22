@@ -1,0 +1,465 @@
+<div id="admin-section" class="section-content" style="display: none;">
+    <div class="dashboard-header d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fa fa-lock mr-2"></i>Admin Control Panel</h2>
+        {% if current_user.is_admin %}
+        <button class="btn btn-primary" onclick="openAddAccountModal()">
+            <i class="fa fa-plus"></i> Add Account
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- Search Bar -->
+    <div class="d-flex justify-content-end mb-2">
+        <input type="text" id="adminSearch" name="adminSearch" class="form-control form-control-sm"
+               style="width: 250px;" placeholder="Search name or email..."
+               oninput="searchAccounts(this.value)">
+    </div>
+
+    <!-- Table -->
+    <div class="table-responsive" style="background: white; border: 1px solid #ddd; border-radius: 4px;">
+        <table class="table table-hover table-sm mb-0" id="accountTable">
+            <thead class="thead-dark">
+                <tr>
+                    <th style="width:50px;">ID</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Date Created</th>
+                    <th>Last Login</th>
+                    <th>Last Updated</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody id="accountBody">
+                {% for u in all_users %}
+                <tr id="account-row-{{ u.id }}" style="cursor:pointer;"
+                    onclick="openEditAccountModal('{{ u.id }}','{{ u.email }}','{{ u.first_name }}','{{ u.is_admin|lower }}')">
+                    <td>{{ loop.index }}</td>
+                    <td id="aname-{{ u.id }}"><strong>{{ u.first_name }}</strong></td>
+                    <td id="aemail-{{ u.id }}">{{ u.email }}</td>
+                    <td id="arole-{{ u.id }}">
+                        <span class="badge {{ 'badge-danger' if u.is_admin else 'badge-secondary' }}">
+                            {{ 'Admin' if u.is_admin else 'User' }}
+                        </span>
+                    </td>
+                    <td id="astatus-{{ u.id }}">
+                        <span class="badge {{ 'badge-success' if u.is_online else 'badge-secondary' }}">
+                            {{ 'Online' if u.is_online else 'Offline' }}
+                        </span>
+                    </td>
+                    <td>{{ u.date_created.strftime('%m/%d/%Y %I:%M %p') if u.date_created else '-' }}</td>
+                    <td id="alogin-{{ u.id }}">
+                        {{ u.last_login.strftime('%m/%d/%Y %I:%M %p') if u.last_login else 'Never' }}
+                    </td>
+                    <td id="aupdated-{{ u.id }}">
+                        {{ u.last_updated.strftime('%m/%d/%Y %I:%M %p') if u.last_updated else 'Never' }}
+                    </td>
+                    <td class="text-center" onclick="event.stopPropagation()">
+                        <button type="button" class="btn btn-link text-danger p-0"
+                                onclick="deleteAccount('{{ u.id }}', '{{ u.first_name }}')">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr id="accountEmptyRow">
+                    <td colspan="9" class="text-center text-muted py-5">No accounts found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Account Modal -->
+<div class="modal fade" id="accountModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="accountModalTitle">Account Info</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="accountId" name="accountId">
+
+                <div class="form-group">
+                    <label for="accountName">Full Name</label>
+                    <input type="text" id="accountName" name="accountName" class="form-control"
+                           placeholder="Enter full name..." autocomplete="off">
+                    <small id="accountNameError" class="text-danger" style="display:none;">
+                        Letters and spaces only.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="accountEmail">Email</label>
+                    <input type="email" id="accountEmail" name="accountEmail" class="form-control"
+                           placeholder="Enter email address..." autocomplete="off">
+                    <small id="accountEmailError" class="text-danger" style="display:none;">
+                        Invalid email format.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="accountPassword">Password
+                        <small class="text-muted" id="passwordHint">(leave blank to keep current)</small>
+                    </label>
+                    <input type="password" id="accountPassword" name="accountPassword" class="form-control"
+                           placeholder="Enter password (min 7 chars)..." autocomplete="new-password">
+                    <small id="accountPasswordError" class="text-danger" style="display:none;">
+                        Password must be at least 7 characters.
+                    </small>
+                </div>
+                <div class="form-group" id="confirmPasswordGroup">
+                    <label for="accountConfirmPassword">Confirm Password</label>
+                    <input type="password" id="accountConfirmPassword" name="accountConfirmPassword" class="form-control"
+                          placeholder="Confirm password...">
+                    <small id="accountConfirmError" class="text-danger" style="display:none;">
+                        Passwords do not match.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="accountIsAdmin">Role</label>
+                    <select id="accountIsAdmin" name="accountIsAdmin" class="form-control">
+                        <option value="false">User</option>
+                        <option value="true">Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer" id="accountModalFooter">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+    // ── Format datetime ───────────────────────────────────────────────────────
+    function formatAdminDateTime(dtStr) {
+        if (!dtStr) return 'Never';
+        const d = new Date(dtStr);
+        return d.toLocaleString('en-PH', {
+            month: '2-digit', day: '2-digit', year: 'numeric',
+            hour:  '2-digit', minute: '2-digit', hour12: true
+        });
+    }
+
+    // ── Open Add modal ────────────────────────────────────────────────────────
+    function openAddAccountModal() {
+    document.getElementById('accountId').value        = '';
+    document.getElementById('accountName').value      = '';
+    document.getElementById('accountEmail').value     = '';
+    document.getElementById('accountPassword').value  = '';
+    document.getElementById('accountConfirmPassword').value = '';
+    document.getElementById('accountIsAdmin').value   = 'false';
+    document.getElementById('passwordHint').style.display = 'none';
+    ['accountNameError','accountEmailError','accountPasswordError','accountConfirmError'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    document.getElementById('accountModalTitle').innerText = 'Add New Account';
+    document.getElementById('accountModalFooter').innerHTML =
+        `<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAccount()">Validate</button>`;
+    $('#accountModal').modal('show');
+}
+
+    // ── Open Edit modal ───────────────────────────────────────────────────────
+   function openEditAccountModal(id, email, name, isAdmin) {
+    document.getElementById('accountId').value       = id;
+    document.getElementById('accountName').value     = name;
+    document.getElementById('accountEmail').value    = email;
+    document.getElementById('accountPassword').value = '';
+    document.getElementById('accountConfirmPassword').value = '';
+    document.getElementById('accountIsAdmin').value  = isAdmin;
+    document.getElementById('passwordHint').style.display = '';
+    ['accountNameError','accountEmailError','accountPasswordError','accountConfirmError'].forEach(eid => {
+        const el = document.getElementById(eid);
+        if (el) el.style.display = 'none';
+    });
+    document.getElementById('accountModalTitle').innerText = `Edit — ${name}`;
+    document.getElementById('accountModalFooter').innerHTML =
+        `<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAccount()">Validate</button>`;
+    $('#accountModal').modal('show');
+}
+
+    // ── Submit add or edit ────────────────────────────────────────────────────
+   function submitAccount() {
+    const id       = document.getElementById('accountId').value;
+    const name     = document.getElementById('accountName').value.trim();
+    const email    = document.getElementById('accountEmail').value.trim();
+    const password = document.getElementById('accountPassword').value.trim();
+    const isAdmin  = document.getElementById('accountIsAdmin').value === 'true';
+    const confirmPassword = document.getElementById('accountConfirmPassword').value.trim();
+
+    // Reset errors
+    ['accountNameError','accountEmailError','accountPasswordError','accountConfirmError'].forEach(eid => {
+        const el = document.getElementById(eid);
+        if (el) el.style.display = 'none';
+    });
+
+    let valid = true;
+
+    // Name validation
+    if (!name || !/^[a-zA-Z\s]+$/.test(name)) {
+        document.getElementById('accountNameError').style.display = 'block';
+        valid = false;
+    }
+    // Email validation
+    if (!email || !/^[\w\.-]+@[\w\.-]+\.\w+$/.test(email)) {
+        document.getElementById('accountEmailError').style.display = 'block';
+        valid = false;
+    }
+
+    // Password validation for new account
+    if (!id && (!password || password.length < 7)) {
+        document.getElementById('accountPasswordError').innerText = 'Password required (min 7 chars).';
+        document.getElementById('accountPasswordError').style.display = 'block';
+        valid = false;
+    }
+    // Password validation for edit (only if password field is not empty)
+    if (id && password && password.length < 7) {
+        document.getElementById('accountPasswordError').innerText = 'Password must be at least 7 characters.';
+        document.getElementById('accountPasswordError').style.display = 'block';
+        valid = false;
+    }
+
+    // Confirm password validation: only required if password is provided
+    if (password) {
+        if (!confirmPassword) {
+            document.getElementById('accountConfirmError').innerText = 'Please confirm your password.';
+            document.getElementById('accountConfirmError').style.display = 'block';
+            valid = false;
+        } else if (password !== confirmPassword) {
+            document.getElementById('accountConfirmError').innerText = 'Passwords do not match.';
+            document.getElementById('accountConfirmError').style.display = 'block';
+            valid = false;
+        }
+    } else {
+        // If no password provided, clear any confirm error
+        document.getElementById('accountConfirmError').style.display = 'none';
+    }
+
+    if (!valid) return;
+
+    const url     = id ? `/update-account/${id}` : '/add-account';
+    const payload = { email, first_name: name, is_admin: isAdmin };
+    if (password) payload.password = password;
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+        if (document.activeElement && document.activeElement.blur) {
+    document.activeElement.blur();
+}
+            $('#accountModal').modal('hide');
+              if (id) {
+                  // Update existing row
+                  const nameCell   = document.getElementById(`aname-${id}`);
+                  const emailCell  = document.getElementById(`aemail-${id}`);
+                  const roleCell   = document.getElementById(`arole-${id}`);
+                  const row        = document.getElementById(`account-row-${id}`);
+
+                  if (nameCell)  nameCell.innerHTML  = `<strong>${escapeHtml(name)}</strong>`;
+                  if (emailCell) emailCell.innerText = email;
+                  if (roleCell)  roleCell.innerHTML  =
+                      `<span class="badge ${isAdmin ? 'badge-danger' : 'badge-secondary'}">
+                          ${isAdmin ? 'Admin' : 'User'}
+                      </span>`;
+                  if (row) row.setAttribute('onclick',
+                      `openEditAccountModal('${id}','${email.replace(/'/g,"\\'")}','${name.replace(/'/g,"\\'")}','${isAdmin}')`);
+
+                  //Update last_updated cell instantly
+                  const updatedCell = document.getElementById(`aupdated-${id}`);
+                  if (updatedCell) {
+                      updatedCell.innerText = formatAdminDateTime(new Date().toISOString());
+                  }
+              } else {
+                // New account – inject row
+                const tbody    = document.getElementById('accountBody');
+                const emptyRow = document.getElementById('accountEmptyRow');
+                if (emptyRow) emptyRow.remove();
+
+                const rowCount = tbody.querySelectorAll('tr[id^="account-row-"]').length + 1;
+                const newRow   = document.createElement('tr');
+                newRow.id      = `account-row-${data.id}`;
+                newRow.style.cursor = 'pointer';
+                newRow.setAttribute('onclick',
+                    `openEditAccountModal('${data.id}','${data.email.replace(/'/g,"\\'")}','${data.first_name.replace(/'/g,"\\'")}','${data.is_admin}')`);
+                newRow.innerHTML = `
+                    <td>${rowCount}</td>
+                    <td id="aname-${data.id}"><strong>${escapeHtml(data.first_name)}</strong></td>
+                    <td id="aemail-${data.id}">${escapeHtml(data.email)}</td>
+                    <td id="arole-${data.id}">
+                        <span class="badge ${data.is_admin ? 'badge-danger' : 'badge-secondary'}">
+                            ${data.is_admin ? 'Admin' : 'User'}
+                        </span>
+                    </td>
+                    <td id="astatus-${data.id}">
+                        <span class="badge badge-secondary">Offline</span>
+                    </td>
+                    <td>${formatAdminDateTime(data.date_created)}</td>
+                    <td id="alogin-${data.id}">Never</td>
+                    <td id="aupdated-${data.id}">Never</td>
+                    <td class="text-center" onclick="event.stopPropagation()">
+                        <button type="button" class="btn btn-link text-danger p-0"
+                                onclick="deleteAccount('${data.id}','${data.first_name.replace(/'/g,"\\'")}')">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(newRow);
+            }
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(err => alert('Failed: ' + err));
+}
+
+    // ── Delete account ────────────────────────────────────────────────────────
+    function deleteAccount(id, name) {
+        if (!confirm(`Permanently delete account "${name}"?\nThis cannot be undone.`)) return;
+        fetch(`/delete-account/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = document.getElementById(`account-row-${id}`);
+                    if (row) row.remove();
+                    const tbody = document.getElementById('accountBody');
+                    if (!tbody.querySelector('tr[id^="account-row-"]')) {
+                        tbody.innerHTML =
+                          `<tr id="accountEmptyRow">
+                              <td colspan="9" class="text-center text-muted py-5">No accounts found.</td>
+                          </tr>`;
+                    }
+                } else {
+                    alert('Failed: ' + data.message);
+                }
+            });
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────────
+    function searchAccounts(query) {
+        const q = query.toLowerCase().trim();
+        const rows = document.querySelectorAll('#accountBody tr[id^="account-row-"]');
+        let anyVisible = false;
+        rows.forEach(row => {
+            const id   = row.id.replace('account-row-', '');
+            const name = (document.getElementById(`aname-${id}`)?.innerText  || '').toLowerCase();
+            const email= (document.getElementById(`aemail-${id}`)?.innerText || '').toLowerCase();
+            const match = name.includes(q) || email.includes(q);
+            row.style.display = match ? '' : 'none';
+            if (match) anyVisible = true;
+        });
+        const emptyRow = document.getElementById('accountEmptyRow');
+        if (emptyRow) emptyRow.style.display = anyVisible ? 'none' : '';
+    }
+
+        // ── Real-time polling — refresh full table every 5s ────────────────────────────
+    let accountRefreshInterval = null;
+
+    function renderAccountTable(accounts) {
+    const tbody = document.getElementById('accountBody');
+    if (!accounts || accounts.length === 0) {
+        tbody.innerHTML = `<tr id="accountEmptyRow">
+            <td colspan="9" class="text-center text-muted py-5">No accounts found.</td>
+        </table>`;
+        return;
+    }
+
+    tbody.innerHTML = accounts.map((u, idx) => {
+        const safeEmail = u.email.replace(/'/g, "\\'");
+        const safeName  = u.first_name.replace(/'/g, "\\'");
+        return `
+        <tr id="account-row-${u.id}" style="cursor:pointer;"
+            onclick="openEditAccountModal('${u.id}','${safeEmail}','${safeName}','${u.is_admin}')">
+            <td>${idx + 1}</td>
+            <td id="aname-${u.id}"><strong>${escapeHtml(u.first_name)}</strong></td>
+            <td id="aemail-${u.id}">${escapeHtml(u.email)}</td>
+            <td id="arole-${u.id}">
+                <span class="badge ${u.is_admin ? 'badge-danger' : 'badge-secondary'}">
+                    ${u.is_admin ? 'Admin' : 'User'}
+                </span>
+            </td>
+            <td id="astatus-${u.id}">
+                <span class="badge ${u.is_online ? 'badge-success' : 'badge-secondary'}">
+                    ${u.is_online ? 'Online' : 'Offline'}
+                </span>
+            </td>
+            <td>${formatAdminDateTime(u.date_created)}</td>
+            <td id="alogin-${u.id}">${formatAdminDateTime(u.last_login)}</td>
+            <td id="aupdated-${u.id}">${formatAdminDateTime(u.last_updated)}</td>
+            <td class="text-center" onclick="event.stopPropagation()">
+                <button type="button" class="btn btn-link text-danger p-0"
+                        onclick="deleteAccount('${u.id}','${safeName}')">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+    function startAccountPolling() {
+        if (accountRefreshInterval) clearInterval(accountRefreshInterval);
+        accountRefreshInterval = setInterval(() => {
+            const section = document.getElementById('admin-section');
+            if (section && section.style.display !== 'none') {
+                fetch('/get-accounts')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            renderAccountTable(data.accounts);
+                        }
+                    })
+                    .catch(err => console.warn('Account polling error:', err));
+            }
+        }, 5000);
+    }
+
+    function stopAccountPolling() {
+        if (accountRefreshInterval) {
+            clearInterval(accountRefreshInterval);
+            accountRefreshInterval = null;
+        }
+    }
+
+    startAccountPolling();
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopAccountPolling();
+        else startAccountPolling();
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+    if (typeof $ !== 'undefined') {
+        $('#accountModal')
+            .on('show.bs.modal', function () {
+                // Move focus to the first input when modal opens
+                setTimeout(() => {
+                    $('#accountName').focus();
+                }, 100);
+            })
+            .on('hide.bs.modal', function () {
+                if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+            });
+    }
+});
+</script>

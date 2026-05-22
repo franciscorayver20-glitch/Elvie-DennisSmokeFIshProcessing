@@ -1,0 +1,572 @@
+<div id="personnel" class="section-content" style="display: none;">
+    <div class="dashboard-header d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-info"><i class="fa fa-users mr-2"></i>Personnel</h2>
+        {% if current_user.is_admin %}
+        <button class="btn btn-primary" onclick="openAddPersonnelModal()">
+            <i class="fa fa-plus"></i> Add Personnel
+        </button>
+        {% endif %}
+    </div>
+    <!-- Search Bar -->
+    <div class="d-flex justify-content-end mb-2">
+        <input type="text" id="personnelSearch" name="personnelSearch" class="form-control form-control-sm"
+            style="width: 250px;" placeholder="Search name or role..."
+            oninput="searchPersonnel(this.value)">
+    </div>
+
+    <div class="table-responsive-scroll" style="background: white; border: 1px solid #ddd; border-radius: 4px;">
+        <table class="table table-hover table-sm mb-0" id="personnelTable">
+            <thead class="thead-dark">
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th>Full Name</th>
+                    <th>Phone Number</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    {% if current_user.is_admin %}
+                    <th class="text-center">Action</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody id="personnelBody">
+                {% for p in personnel_list %}
+                <tr id="personnel-row-{{ p.id }}" style="cursor: pointer;"
+                    onclick="openPersonnelModal('{{ p.id }}', '{{ p.name }}', '{{ p.phone }}', '{{ p.role }}', '{{ p.status }}')">
+                    <td>{{ loop.index }}</td>
+                    <td id="pname-{{ p.id }}"><strong>{{ p.name }}</strong></td>
+                    <td id="pphone-{{ p.id }}">
+                        <span id="pphone-text-{{ p.id }}">{{ p.phone }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ml-1 py-0 px-1"
+                                title="Copy number"
+                                onclick="event.stopPropagation(); copyPhone('{{ p.phone }}', this)">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                    </td>
+                    <td id="prole-{{ p.id }}">{{ p.role }}</td>
+                    <td id="pstatus-{{ p.id }}">
+                        {% if current_user.is_admin %}
+                        <select name="status" id="status-{{ p.id }}" class="form-control form-control-sm" style="width: auto;"
+        onclick="event.stopPropagation()"
+        onchange="updatePersonnelStatus('{{ p.id }}', this.value, this)">
+                            <option value="Available"   {% if p.status == 'Available' %}selected{% endif %}>Available</option>
+                            <option value="On Duty"     {% if p.status == 'On Duty' %}selected{% endif %}>On Duty</option>
+                            <option value="Unavailable" {% if p.status == 'Unavailable' %}selected{% endif %}>Unavailable</option>
+                        </select>
+                        {% else %}
+                        <span class="badge
+                            {% if p.status == 'Available' %}badge-success
+                            {% elif p.status == 'On Duty' %}badge-primary
+                            {% else %}badge-secondary{% endif %}">
+                            {{ p.status }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    {% if current_user.is_admin %}
+                    <td class="text-center" onclick="event.stopPropagation()">
+                        <button type="button" class="btn btn-link text-danger p-0"
+                                onclick="deletePersonnel('{{ p.id }}', '{{ p.name }}')">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr id="personnelEmptyRow">
+                    <td colspan="{{ '6' if current_user.is_admin else '5' }}"
+                        class="text-center text-muted py-5">No personnel found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Personnel Modal -->
+<div class="modal fade" id="personnelModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="personnelModalTitle">Personnel Info</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="personnelId" name="personnelId">
+
+                <div class="form-group">
+                    <label for="personnelName">Full Name</label>
+                    <input type="text" id="personnelName" name="personnelName" class="form-control"
+                           placeholder="Enter full name..." autocomplete="off"
+                           oninput="validateNameInput(this)">
+                    <small id="personnelNameError" class="text-danger" style="display:none;">
+                        Letters and spaces only.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="personnelPhone">Phone Number</label>
+                    <div class="input-group">
+                        <input type="text" id="personnelPhone" name="personnelPhone" class="form-control"
+                                placeholder="Enter phone number (11 digits)..."
+                                autocomplete="off"
+                                maxlength="11"
+                                oninput="validatePhoneInput(this)">
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary" 
+                                    onclick="copyPhone(document.getElementById('personnelPhone').value, this)"
+                                    title="Copy number">
+                                <i class="fa fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <small id="personnelPhoneError" class="text-danger" style="display:none;">
+                        Numbers only (digits and + allowed).
+                    </small>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="personnelRole">Role</label>
+                        <select id="personnelRole" name="personnelRole" class="form-control">
+                            <option value="Delivery">Delivery</option>
+                            <option value="Supervisor">Supervisor</option>
+                            <option value="Staff">Staff</option>
+                            <option value="Driver">Driver</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="personnelStatus">Status</label>
+                        <select id="personnelStatus" name="personnelStatus" class="form-control">
+                            <option value="Available">Available</option>
+                            <option value="On Duty">On Duty</option>
+                            <option value="Unavailable">Unavailable</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="personnelModalFooter">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+// ========== REAL-TIME POLLING FOR PERSONNEL ==========
+let personnelRefreshInterval = null;
+
+function refreshPersonnelTable() {
+    fetch('/get-personnel-list')
+        .then(res => res.json())
+        .then(data => {
+            // Rebuild the personnel table body
+            const tbody = document.getElementById('personnelBody');
+            if (!data.personnel || data.personnel.length === 0) {
+                const cols = {{ '6' if current_user.is_admin else '5' }};
+                tbody.innerHTML = `<tr id="personnelEmptyRow">
+                    <td colspan="${cols}" class="text-center text-muted py-5">No personnel found.</td>
+                </tr>`;
+                return;
+            }
+            tbody.innerHTML = data.personnel.map((p, idx) => `
+                <tr id="personnel-row-${p.id}" style="cursor: pointer;"
+                    onclick="openPersonnelModal('${p.id}', '${escapeHtml(p.name)}', '${p.phone}', '${p.role}', '${p.status}')">
+                    <td>${idx + 1}</td>
+                    <td id="pname-${p.id}"><strong>${escapeHtml(p.name)}</strong></td>
+                    <td id="pphone-${p.id}">
+                        <span id="pphone-text-${p.id}">${p.phone}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ml-1 py-0 px-1"
+                                title="Copy number"
+                                onclick="event.stopPropagation(); copyPhone('${p.phone}', this)">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                    </td>
+                    <td id="prole-${p.id}">${p.role}</td>
+                    <td id="pstatus-${p.id}">
+                        ${ {{ 'true' if current_user.is_admin else 'false' }} ? `
+                      <select name="status" id="status-${p.id}" class="form-control form-control-sm" style="width:auto;"
+        onclick="event.stopPropagation()"
+        onchange="updatePersonnelStatus('${p.id}', this.value, this)">
+                            <option value="Available" ${p.status === 'Available' ? 'selected' : ''}>Available</option>
+                            <option value="On Duty" ${p.status === 'On Duty' ? 'selected' : ''}>On Duty</option>
+                            <option value="Unavailable" ${p.status === 'Unavailable' ? 'selected' : ''}>Unavailable</option>
+                        </select>
+                        ` : `
+                        <span class="badge ${p.status === 'Available' ? 'badge-success' : (p.status === 'On Duty' ? 'badge-primary' : 'badge-secondary')}">
+                            ${p.status}
+                        </span>
+                        `}
+                    </td>
+                    ${ {{ 'true' if current_user.is_admin else 'false' }} ? `
+                    <td class="text-center" onclick="event.stopPropagation()">
+                        <button type="button" class="btn btn-link text-danger p-0"
+                                onclick="deletePersonnel('${p.id}', '${escapeHtml(p.name)}')">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </td>
+                    ` : ''}
+                </tr>
+            `).join('');
+        })
+        .catch(err => console.warn('Personnel refresh error:', err));
+}
+
+function startPersonnelPolling() {
+    if (personnelRefreshInterval) clearInterval(personnelRefreshInterval);
+    personnelRefreshInterval = setInterval(() => {
+        const persSection = document.getElementById('personnel');
+        if (persSection && persSection.style.display !== 'none') {
+            refreshPersonnelTable();
+        }
+    }, 5000);
+}
+
+function stopPersonnelPolling() {
+    if (personnelRefreshInterval) {
+        clearInterval(personnelRefreshInterval);
+        personnelRefreshInterval = null;
+    }
+}
+
+startPersonnelPolling();
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopPersonnelPolling();
+    else startPersonnelPolling();
+});
+
+
+
+
+
+    // ── Input validation ──────────────────────────────────────────────────────
+    function validateNameInput(input) {
+        const valid = /^[a-zA-Z\s]*$/.test(input.value);
+        document.getElementById('personnelNameError').style.display = valid ? 'none' : 'block';
+        if (!valid) input.value = input.value.replace(/[^a-zA-Z\s]/g, '');
+    }
+
+    function validatePhoneInput(input) {
+        input.value = input.value.replace(/[^\d]/g, '').slice(0, 11);
+        const error = document.getElementById('personnelPhoneError');
+        if (input.value.length > 0 && input.value.length < 11) {
+            error.innerText = 'Phone number must be 11 digits.';
+            error.style.display = 'block';
+        } else {
+            error.style.display = 'none';
+        }
+    }
+
+    // ── Copy phone — fallback for non-HTTPS ──────────────────────────────────
+    function copyPhone(number, btn) {
+        number = (number || '').trim();
+            if (!number) {
+        alert('No number to copy.');
+        return;
+    }
+
+        const original = btn.innerHTML;
+        const showSuccess = () => {
+            btn.innerHTML = '<i class="fa fa-check text-success"></i>';
+            setTimeout(() => { btn.innerHTML = original; }, 1500);
+        };
+
+        // Modern clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(number)
+                .then(showSuccess)
+                .catch(() => fallbackCopy(number, btn, original));
+        } else {
+            fallbackCopy(number, btn, original);
+        }
+    }
+
+    function fallbackCopy(number, btn, original) {
+        // Fallback: create temp textarea
+        const ta = document.createElement('textarea');
+        ta.value = number;
+        ta.style.position = 'fixed';
+        ta.style.opacity  = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+            btn.innerHTML = '<i class="fa fa-check text-success"></i>';
+            setTimeout(() => { btn.innerHTML = original; }, 1500);
+        } catch (e) {
+            alert('Copy failed. Number: ' + number);
+        }
+        document.body.removeChild(ta);
+    }
+
+    // ── Open modal (view or edit) ─────────────────────────────────────────────
+    function openPersonnelModal(id, name, phone, role, status) {
+        document.getElementById('personnelId').value     = id;
+        document.getElementById('personnelName').value   = name;
+        document.getElementById('personnelPhone').value  = phone;
+        document.getElementById('personnelRole').value   = role;
+        document.getElementById('personnelStatus').value = status;
+
+        // Hide validation errors
+        document.getElementById('personnelNameError').style.display  = 'none';
+        document.getElementById('personnelPhoneError').style.display = 'none';
+
+        const isAdmin = {{ 'true' if current_user.is_admin else 'false' }};
+
+        ['personnelName', 'personnelPhone', 'personnelRole', 'personnelStatus'].forEach(fid => {
+            const el = document.getElementById(fid);
+            if (isAdmin) { el.removeAttribute('disabled'); }
+            else         { el.setAttribute('disabled', 'disabled'); }
+        });
+
+        document.getElementById('personnelModalTitle').innerText = isAdmin
+            ? `Edit — ${name}` : `Personnel Info — ${name}`;
+
+        document.getElementById('personnelModalFooter').innerHTML = isAdmin
+            ? `<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+               <button type="button" class="btn btn-primary" onclick="submitPersonnel()">Validate</button>`
+            : `<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>`;
+
+        $('#personnelModal').modal('show');
+    }
+
+    // ── Open modal (add new) ──────────────────────────────────────────────────
+    function openAddPersonnelModal() {
+        document.getElementById('personnelId').value     = '';
+        document.getElementById('personnelName').value   = '';
+        document.getElementById('personnelPhone').value  = '';
+        document.getElementById('personnelRole').value   = 'Delivery';
+        document.getElementById('personnelStatus').value = 'Available';
+        document.getElementById('personnelNameError').style.display  = 'none';
+        document.getElementById('personnelPhoneError').style.display = 'none';
+
+        ['personnelName','personnelPhone','personnelRole','personnelStatus'].forEach(fid => {
+            document.getElementById(fid).removeAttribute('disabled');
+        });
+
+        document.getElementById('personnelModalTitle').innerText = 'Add New Personnel';
+        document.getElementById('personnelModalFooter').innerHTML =
+            `<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+             <button type="button" class="btn btn-primary" onclick="submitPersonnel()">Validate</button>`;
+
+        $('#personnelModal').modal('show');
+    }
+
+    // ── Submit (add or edit) — updates DOM instantly ──────────────────────────
+   function submitPersonnel() {
+    const id = document.getElementById('personnelId').value;
+    const name = document.getElementById('personnelName').value.trim();
+    const phone = document.getElementById('personnelPhone').value.trim();
+    const role = document.getElementById('personnelRole').value;
+    const status = document.getElementById('personnelStatus').value;
+
+    if (!name) { alert('Full name is required.'); return; }
+    if (!phone) { alert('Phone number is required.'); return; }
+    if (!/^[a-zA-Z\s]+$/.test(name)) { alert('Name: letters and spaces only.'); return; }
+    if (!/^\d{11}$/.test(phone)) { alert('Phone must be exactly 11 digits.'); return; }
+
+    const url = id ? `/update-personnel/${id}` : '/add-personnel';
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, role, status })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('Server response:', data);
+
+        // Success if status is 'success' OR we got an id back (for new personnel)
+        const isSuccess = (data.status === 'success') || (data.id && !id);
+        if (!isSuccess) {
+            alert('Error: ' + (data.message || JSON.stringify(data)));
+            return;
+        }
+        if (document.activeElement && document.activeElement.blur) {
+    document.activeElement.blur();
+}
+        $('#personnelModal').modal('hide');
+        const newId = data.id || id;
+
+        if (id) {
+            // Update existing row
+            const nameCell = document.getElementById(`pname-${id}`);
+            const phoneCell = document.getElementById(`pphone-${id}`);
+            const roleCell = document.getElementById(`prole-${id}`);
+            const statusCell = document.getElementById(`pstatus-${id}`);
+            const row = document.getElementById(`personnel-row-${id}`);
+
+            if (nameCell) nameCell.innerHTML = `<strong>${escapeHtml(name)}</strong>`;
+            if (roleCell) roleCell.innerText = role;
+            if (phoneCell) {
+                phoneCell.innerHTML = `<span id="pphone-text-${id}">${phone}</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ml-1 py-0 px-1"
+                        title="Copy number" onclick="event.stopPropagation(); copyPhone('${phone}', this)">
+                        <i class="fa fa-copy"></i>
+                    </button>`;
+            }
+            if (statusCell) {
+                const sel = statusCell.querySelector('select');
+                if (sel) sel.value = status;
+            }
+            if (row) {
+                row.setAttribute('onclick', `openPersonnelModal('${id}','${escapeHtml(name)}','${phone}','${role}','${status}')`);
+            }
+        } else if (newId) {
+            // Add new row dynamically
+            const tbody = document.getElementById('personnelBody');
+            const emptyRow = document.getElementById('personnelEmptyRow');
+            if (emptyRow) emptyRow.remove();
+
+            const rowCount = tbody.querySelectorAll('tr[id^="personnel-row"]').length + 1;
+            const isAdmin = {{ 'true' if current_user.is_admin else 'false' }};
+
+            const newRow = document.createElement('tr');
+            newRow.id = `personnel-row-${newId}`;
+            newRow.style.cursor = 'pointer';
+            newRow.setAttribute('onclick', `openPersonnelModal('${newId}','${escapeHtml(name)}','${phone}','${role}','${status}')`);
+
+            let statusHtml = '';
+            if (isAdmin) {
+                statusHtml = `<select name="status" class="form-control form-control-sm" style="width:auto;" onclick="event.stopPropagation()" onchange="updatePersonnelStatus('${newId}', this.value, this)">
+                    <option value="Available" ${status === 'Available' ? 'selected' : ''}>Available</option>
+                    <option value="On Duty" ${status === 'On Duty' ? 'selected' : ''}>On Duty</option>
+                    <option value="Unavailable" ${status === 'Unavailable' ? 'selected' : ''}>Unavailable</option>
+                </select>`;
+            } else {
+                let badgeClass = status === 'Available' ? 'badge-success' : (status === 'On Duty' ? 'badge-primary' : 'badge-secondary');
+                statusHtml = `<span class="badge ${badgeClass}">${status}</span>`;
+            }
+
+            let actionHtml = '';
+            if (isAdmin) {
+                actionHtml = `<td class="text-center" onclick="event.stopPropagation()">
+                    <button class="btn btn-link text-danger p-0" onclick="deletePersonnel('${newId}', '${escapeHtml(name)}')">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </td>`;
+            }
+
+            newRow.innerHTML = `
+                <td>${rowCount}</td>
+                <td id="pname-${newId}"><strong>${escapeHtml(name)}</strong></td>
+                <td id="pphone-${newId}">
+                    <span id="pphone-text-${newId}">${phone}</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ml-1 py-0 px-1" title="Copy number"
+                        onclick="event.stopPropagation(); copyPhone('${phone}', this)">
+                        <i class="fa fa-copy"></i>
+                    </button>
+                </td>
+                <td id="prole-${newId}">${role}</td>
+                <td id="pstatus-${newId}">${statusHtml}</td>
+                ${actionHtml}
+            `;
+            tbody.appendChild(newRow);
+        } else {
+            // Fallback: reload if something unexpected
+            location.reload();
+        }
+    })
+    .catch(err => {
+        console.error('Fetch error:', err);
+        alert('Network error: ' + err.message);
+    });
+}
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+    function deletePersonnel(id, name) {
+        if (!confirm(`Delete "${name}" from personnel?\nThis cannot be undone.`)) return;
+        fetch(`/delete-personnel/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = document.getElementById(`personnel-row-${id}`);
+                    if (row) row.remove();
+                    const tbody = document.getElementById('personnelBody');
+                    if (!tbody.querySelector('tr[id^="personnel-row"]')) {
+                        const cols = {{ '6' if current_user.is_admin else '5' }};
+                        tbody.innerHTML = `<tr id="personnelEmptyRow">
+                            <td colspan="${cols}" class="text-center text-muted py-5">No personnel found.</td>
+                        </tr>`;
+                    }
+                } else {
+                    alert('Failed to delete: ' + data.message);
+                }
+            });
+    }
+
+    // ── Status dropdown update — instant, no reload ───────────────────────────
+    function updatePersonnelStatus(id, status, selectEl) {
+    const originalValue = selectEl.value;
+    fetch(`/update-personnel/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+    })
+    .then(async res => {
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch(e) {
+            throw new Error('Invalid server response');
+        }
+        if (!res.ok) throw new Error(data.message || 'HTTP error');
+        return data;
+    })
+    .then(data => {
+        if (data.status !== 'success') {
+            alert('Failed to update status: ' + (data.message || 'Unknown'));
+            selectEl.value = originalValue;
+        } else {
+            const row = document.getElementById(`personnel-row-${id}`);
+            if (row) {
+                const current = row.getAttribute('onclick');
+                const updated = current.replace(/'[^']*'\)$/, `'${status}')`);
+                row.setAttribute('onclick', updated);
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Status update error:', err);
+        alert('Network error. Status not updated.');
+        selectEl.value = originalValue;
+    });
+}
+
+function searchPersonnel(query) {
+    const q = query.toLowerCase().trim();
+    const rows = document.querySelectorAll('#personnelBody tr[id^="personnel-row"]');
+    let anyVisible = false;
+    rows.forEach(row => {
+        const name = (document.getElementById(`pname-${row.id.replace('personnel-row-','')}`)
+            ?.innerText || '').toLowerCase();
+        const role = (document.getElementById(`prole-${row.id.replace('personnel-row-','')}`)
+            ?.innerText || '').toLowerCase();
+        const match = name.includes(q) || role.includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) anyVisible = true;
+    });
+    const empty = document.getElementById('personnelEmptyRow');
+    if (empty) empty.style.display = anyVisible ? 'none' : '';
+}
+
+
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof $ !== 'undefined') {
+            $('#personnelModal').on('hide.bs.modal', function () {
+                if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+            });
+        }
+    });
+</script>

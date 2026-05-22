@@ -1,0 +1,313 @@
+<div id="inventory" class="section-content" style="display: none;">
+    <div class="dashboard-header d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-warning"><i class="fa fa-archive mr-2"></i>Products Inventory</h2>
+        <button class="btn btn-primary" onclick="prepareAddModal()">
+            <i class="fa fa-plus"></i> Add Product
+        </button>
+    </div>
+
+    <!-- Date Sheet Tabs -->
+    <div class="tabs-scroll-wrapper">
+        <div class="excel-tabs-container mb-3" id="inventory-tabs" style="display: inline-flex; gap: 5px;">
+            {% for psheet in product_sheets %}
+            <button class="product-tab {% if psheet.id == active_product_sheet_id %}active{% endif %}"
+                    onclick="switchProductSheet({{ psheet.id }})"
+                    oncontextmenu="showProductTabMenu(event, {{ psheet.id }}, '{{ psheet.label }}')">
+                {{ psheet.label }}
+            </button>
+            {% endfor %}
+            <button class="excel-tab excel-tab-add" onclick="addProductSheet()">+</button>
+        </div>
+    </div>
+
+    <!-- Right-click Context Menu for Product Tabs -->
+    <div id="productTabContextMenu" style="display: none; position: fixed; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 2px 4px 12px rgba(0,0,0,0.15); z-index: 9999; min-width: 160px; font-size: 14px;">
+        <div id="productCtxLabel" style="padding: 8px 14px; font-weight: bold; color: #555; border-bottom: 1px solid #eee; font-size: 12px;"></div>
+        <div onclick="productCtxRemove()" style="padding: 8px 14px; cursor: pointer; display:flex; align-items:center; gap:8px; color:#6c757d;" onmouseover="this.style.background='#f8f8f8'" onmouseout="this.style.background='white'">
+            <i class="fa fa-times"></i> Remove
+        </div>
+    </div>
+
+    <!-- Duplicate date inline warning -->
+    <div id="productSheetWarning" class="text-danger small mb-2" style="display:none;">
+        <i class="fa fa-exclamation-circle"></i> A table for today already exists.
+    </div>
+
+    <!-- Search Bar -->
+    <div class="d-flex justify-content-end mb-2">
+        <input type="text" id="inventorySearch" name="inventorySearch" class="form-control form-control-sm"
+               style="width: 250px;" placeholder="Search product name or category..."
+               oninput="searchInventory(this.value)">
+    </div>
+
+    <!-- Table -->
+    <div class="table-responsive-scroll" style="background: white; border: 1px solid #ddd; border-radius: 4px;">
+        <table class="table table-hover table-sm mb-0" id="productTable">
+            <thead class="thead-dark">
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th>Price/Unit</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th>Last Modified</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody id="inventoryBody">
+                {% for p in products %}
+                <tr id="row-{{ p.id }}" style="cursor: pointer;">
+                    <td onclick="editProduct('{{ p.id }}', '{{ p.name }}', '{{ p.price }}', '{{ p.stock }}', '{{ p.category }}', '{{ p.unit }}')">{{ loop.index }}</td>
+                    <td onclick="editProduct('{{ p.id }}', '{{ p.name }}', '{{ p.price }}', '{{ p.stock }}', '{{ p.category }}', '{{ p.unit }}')"><strong>{{ p.name }}</strong></td>
+                    <td onclick="editProduct('{{ p.id }}', '{{ p.name }}', '{{ p.price }}', '{{ p.stock }}', '{{ p.category }}', '{{ p.unit }}')">{{ p.category }}</td>
+                    <td onclick="editProduct('{{ p.id }}', '{{ p.name }}', '{{ p.price }}', '{{ p.stock }}', '{{ p.category }}', '{{ p.unit }}')">Php {{ "{:,.2f}".format(p.price) }} / {{ p.unit }}</td>
+                    <td onclick="editProduct('{{ p.id }}', '{{ p.name }}', '{{ p.price }}', '{{ p.stock }}', '{{ p.category }}', '{{ p.unit }}')">{{ p.stock }} {{ p.unit }}</td>
+                    <td><span class="badge {{ 'badge-success' if p.stock > 10 else ('badge-warning' if p.stock > 0 else 'badge-danger') }}">{{ p.status }}</span></td>
+                    <td id="prod-modified-{{ p.id }}">{{ p.last_modified.strftime('%m/%d/%Y %I:%M %p') if p.last_modified else '-' }}</td>
+                    <td class="text-center"><button type="button" class="btn btn-link text-danger p-0" onclick="deleteProduct('{{ p.id }}', '{{ p.name }}')"><i class="fa fa-trash"></i></button></td>
+                </tr>
+                {% else %}
+                <tr id="inventoryEmptyRow"><td colspan="8" class="text-center text-muted py-5">No products found.小说网</tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal fade" id="productModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <form id="productForm">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title" id="modalTitle">Product Validation Form</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="prodName">Product Name:</label>
+                        <input type="text" name="name" id="prodName" class="form-control" autocomplete="off" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="prodCategory">Category:</label>
+                            <select name="category" id="prodCategory" class="form-control">
+                                <option value="Smoked">Smoked</option>
+                                <option value="Dried">Dried</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="prodUnit">Weight Unit:</label>
+                            <select name="unit" id="prodUnit" class="form-control">
+                                <option value="kg">Kilograms (kg)</option>
+                                <option value="g">Grams (g)</option>
+                                <option value="pcs">Pieces (pcs)</option>
+                                <option value="pack">Pack</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="prodPrice">Price:</label>
+                            <input type="number" step="0.01" name="price" id="prodPrice" class="form-control" autocomplete="off" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="prodStock">Stock Quantity:</label>
+                            <input type="number" name="stock" id="prodStock" class="form-control" autocomplete="off" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="submitProduct()">Validate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Make these global so index.js can see them
+    window.currentAction = "/add-product";
+    window.activeProductSheetId = {{ active_product_sheet_id }};
+
+    let productCtxSheetId     = null;
+    let productCtxSheetLabel  = '';
+
+    function formatProductDateTime(dtStr) {
+        if (!dtStr) return '-';
+        const d = new Date(dtStr);
+        return d.toLocaleString('en-PH', {
+            month: '2-digit', day: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+        });
+    }
+
+    function showProductTabMenu(event, sheetId, sheetLabel) {
+        event.preventDefault();
+        productCtxSheetId    = sheetId;
+        productCtxSheetLabel = sheetLabel;
+        const menu = document.getElementById('productTabContextMenu');
+        document.getElementById('productCtxLabel').innerText = sheetLabel;
+        menu.style.display = 'block';
+        menu.style.left    = event.clientX + 'px';
+        menu.style.top     = event.clientY + 'px';
+    }
+
+    document.addEventListener('click', function (e) {
+        const invSection = document.getElementById('inventory');
+        if (invSection && invSection.style.display !== 'none') {
+            const pMenu = document.getElementById('productTabContextMenu');
+            if (pMenu) pMenu.style.display = 'none';
+        }
+    });
+
+    function productCtxRemove() {
+        if (!confirm(`Archive tab "${productCtxSheetLabel}"? You can restore it from History.`)) return;
+        fetch(`/archive-product-sheet/${productCtxSheetId}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const tabs = document.querySelectorAll('#inventory-tabs .product-tab');
+                    tabs.forEach(tab => {
+                        if (tab.getAttribute('onclick') && tab.getAttribute('onclick').includes(`switchProductSheet(${productCtxSheetId})`)) {
+                            tab.remove();
+                        }
+                    });
+                    if (productCtxSheetId === window.activeProductSheetId) {
+                        const remaining = document.querySelectorAll('#inventory-tabs .product-tab');
+                        if (remaining.length > 0) {
+                            const firstId = parseInt(remaining[0].getAttribute('onclick').match(/\d+/)[0]);
+                            switchProductSheet(firstId);
+                        } else {
+                            document.getElementById('inventoryBody').innerHTML = `<tr id="inventoryEmptyRow"><td colspan="8" class="text-center text-muted py-5">No products found.小说网`;
+                        }
+                    }
+                } else {
+                    alert('Failed to archive sheet.');
+                }
+            })
+            .catch(err => {
+                console.error('Archive error:', err);
+                alert('Network error. Could not archive sheet.');
+            });
+    }
+
+    function switchProductSheet(sheetId) {
+        window.activeProductSheetId = sheetId;
+        localStorage.setItem("activeSection", "inventory");
+        document.querySelectorAll('#inventory-tabs .product-tab').forEach(tab => {
+            tab.classList.remove('active');
+            if (tab.getAttribute('onclick') && tab.getAttribute('onclick').includes(`switchProductSheet(${sheetId})`)) {
+                tab.classList.add('active');
+            }
+        });
+        history.pushState(null, '', `/?product_sheet_id=${sheetId}#inventory`);
+        fetch(`/get-product-sheet/${sheetId}`)
+            .then(res => res.json())
+            .then(data => renderInventoryTable(data.products));
+    }
+
+    function renderInventoryTable(products) {
+        const tbody = document.getElementById('inventoryBody');
+        if (!products || products.length === 0) {
+            tbody.innerHTML = `<tr id="inventoryEmptyRow"><td colspan="8" class="text-center text-muted py-5">No products found.小说网`;
+            return;
+        }
+        tbody.innerHTML = products.map((p, i) => {
+            const safeName = p.name.replace(/'/g, "\\'");
+            return `<tr id="row-${p.id}" style="cursor:pointer;">
+                <td onclick="editProduct('${p.id}','${safeName}','${p.price}','${p.stock}','${p.category}','${p.unit}')">${i + 1}</td>
+                <td onclick="editProduct('${p.id}','${safeName}','${p.price}','${p.stock}','${p.category}','${p.unit}')"><strong>${p.name}</strong></td>
+                <td onclick="editProduct('${p.id}','${safeName}','${p.price}','${p.stock}','${p.category}','${p.unit}')">${p.category}</td>
+                <td onclick="editProduct('${p.id}','${safeName}','${p.price}','${p.stock}','${p.category}','${p.unit}')">Php ${parseFloat(p.price).toLocaleString('en-PH', {minimumFractionDigits:2})} / ${p.unit}</td>
+                <td onclick="editProduct('${p.id}','${safeName}','${p.price}','${p.stock}','${p.category}','${p.unit}')">${p.stock} ${p.unit}</td>
+                <td><span class="badge ${p.stock > 10 ? 'badge-success' : p.stock > 0 ? 'badge-warning' : 'badge-danger'}">${p.status}</span></td>
+                <td id="prod-modified-${p.id}">${formatProductDateTime(p.last_modified)}</td>
+                <td class="text-center"><button type="button" class="btn btn-link text-danger p-0" onclick="deleteProduct('${p.id}', '${safeName}')"><i class="fa fa-trash"></i></button></td>
+            </tr>`;
+        }).join('');
+    }
+
+    let inventoryRefreshInterval = null;
+    function startInventoryPolling() {
+        if (inventoryRefreshInterval) clearInterval(inventoryRefreshInterval);
+        inventoryRefreshInterval = setInterval(() => {
+            const invSection = document.getElementById('inventory');
+            if (invSection && invSection.style.display !== 'none') {
+                fetch(`/get-product-sheet/${window.activeProductSheetId}`)
+                    .then(res => res.json())
+                    .then(data => renderInventoryTable(data.products))
+                    .catch(err => console.warn('Polling error:', err));
+            }
+        }, 5000);
+    }
+    function stopInventoryPolling() {
+        if (inventoryRefreshInterval) clearInterval(inventoryRefreshInterval);
+        inventoryRefreshInterval = null;
+    }
+    startInventoryPolling();
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopInventoryPolling();
+        else startInventoryPolling();
+    });
+
+    function addProductSheet() {
+        const warning = document.getElementById('productSheetWarning');
+        warning.style.display = 'none';
+        fetch('/add-product-sheet', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'duplicate') {
+                    warning.style.display = 'block';
+                    setTimeout(() => { warning.style.display = 'none'; }, 3000);
+                } else if (data.status === 'success') {
+                    const addBtn = document.querySelector('#inventory-tabs .excel-tab-add');
+                    const newTab = document.createElement('button');
+                    newTab.className = 'product-tab';
+                    newTab.innerText = data.label;
+                    newTab.setAttribute('onclick', `switchProductSheet(${data.sheet_id})`);
+                    newTab.setAttribute('oncontextmenu', `showProductTabMenu(event, ${data.sheet_id}, '${data.label}')`);
+                    addBtn.parentNode.insertBefore(newTab, addBtn);
+                    switchProductSheet(data.sheet_id);
+                } else {
+                    alert('Failed to create sheet: ' + data.message);
+                }
+            });
+    }
+
+    function searchInventory(query) {
+        const q = query.toLowerCase().trim();
+        const rows = document.querySelectorAll('#inventoryBody tr[id^="row-"]');
+        let anyVisible = false;
+        rows.forEach(row => {
+            const name = (row.cells[1] ? row.cells[1].innerText : '').toLowerCase();
+            const category = (row.cells[2] ? row.cells[2].innerText : '').toLowerCase();
+            const match = name.includes(q) || category.includes(q);
+            row.style.display = match ? '' : 'none';
+            if (match) anyVisible = true;
+        });
+        const emptyRow = document.getElementById('inventoryEmptyRow');
+        if (emptyRow) emptyRow.style.display = anyVisible ? 'none' : '';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof $ !== 'undefined') {
+            $('#productModal').on('hide.bs.modal', function () {
+                if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            });
+        }
+    });
+</script>

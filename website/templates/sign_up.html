@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <form method="POST" id="signupForm">
+            <h3 align="center">Sign Up</h3>
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" class="form-control" id="email" name="email" placeholder="Enter email" required>
+            </div>
+            <div class="form-group">
+                <label for="firstName">First Name</label>
+                <input type="text" class="form-control" id="firstName" name="firstName" placeholder="Enter first name" required>
+            </div>
+            <div class="form-group">
+                <label for="password1">Password</label>
+                <input type="password" class="form-control" id="password1" name="password1" placeholder="Enter Password" required>
+            </div>
+            <div class="form-group">
+                <label for="password2">Password (Confirm)</label>
+                <input type="password" class="form-control" id="password2" name="password2" placeholder="Confirm Password" required>
+                <small id="passwordConfirmError" class="text-danger" style="display:none;">Passwords do not match.</small>
+            </div>
+            <br/>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function validateConfirmPassword() {
+        const pwd1 = document.getElementById('password1').value;
+        const pwd2 = document.getElementById('password2').value;
+        const errorSpan = document.getElementById('passwordConfirmError');
+        if (pwd1 !== pwd2) {
+            errorSpan.style.display = 'block';
+            return false;
+        } else {
+            errorSpan.style.display = 'none';
+            return true;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const pwd1 = document.getElementById('password1');
+        const pwd2 = document.getElementById('password2');
+        if (pwd1 && pwd2) {
+            pwd1.addEventListener('input', validateConfirmPassword);
+            pwd2.addEventListener('input', validateConfirmPassword);
+        }
+
+        const form = document.getElementById('signupForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                if (!validateConfirmPassword()) {
+                    e.preventDefault();
+                    alert('Passwords do not match. Please check and try again.');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

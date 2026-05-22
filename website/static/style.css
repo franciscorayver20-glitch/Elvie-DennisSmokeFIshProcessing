@@ -1,0 +1,410 @@
+/* Global Reset & Layout Fixes */
+body, html{
+    overflow-x: hidden;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Remove default Bootstrap padding that causes gaps */
+.container-fluid{
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Keeps Sidebar and Main Content Side-by-Side without wrapping */
+.row.flex-nowrap{
+    display: flex;
+    width: 100%;
+    margin: 0;
+}
+
+/* Side Bar Core Styles */
+#mainSidebar{
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    background-color:#f8f9fa;
+    overflow-x: hidden;
+    transition: transform 0.3s cubic-bezier(0,0,0.2,1), visibility 0.3s;
+}
+
+/* Mobile & Windowed View (under 992px) */
+@media (max-width: 991.98px) {
+    .row.flex-nowrap {
+        display: block !important;
+        width: 100% !important; 
+    }
+
+    /* FIX: Ensures Brand Name stays aligned to the left next to burger button */
+    .navbar-brand {
+        margin-right: 0 !important;
+        padding-left: 5px !important;
+        text-align: left !important;
+        flex-grow: 1;
+    }
+
+    #mainSidebar {
+        position: fixed !important; 
+        top: 56px !important; 
+        left: 0 !important;
+        width: 260px !important;
+        max-width: 260px !important;
+        height: calc(100vh - 56px) !important;
+        z-index: 1040 !important; 
+        overflow-y: auto !important; 
+        -webkit-overflow-scrolling: touch;
+        background-color: #f8f9fa !important;
+        box-shadow: 5px 0 15px rgba(0,0,0,0.2) !important;
+    }
+
+    #mainSidebar.collapse:not(.show) {
+        display: block !important;
+        visibility: hidden !important;
+        transform: translateX(-100%) !important;
+    }
+
+    #mainSidebar.collapse.show {
+        display: block !important;
+        visibility: visible !important;
+        transform: translateX(0) !important;
+    }
+main {
+        margin-left: 0 !important;      /* Forces text to start at the left edge */
+        width: 100% !important;         /* Takes up full screen width */
+        max-width: 100% !important;
+        flex: 0 0 100% !important;      /* Prevents Bootstrap from squishing it */
+        
+        padding-left: 20px !important;  /* Consistent gutter spacing */
+        padding-right: 20px !important;
+        display: block !important;
+    }
+}
+
+/* Desktop View (992px and above) */
+@media (min-width: 992px) {
+    #mainSidebar.collapse {
+        display: flex !important;
+        visibility: visible !important;
+        transform: translateX(0) !important;
+        min-width: 250px;
+        max-width: 250px;
+        position: relative;
+    }
+
+    .navbar-toggler {
+        display: none !important;
+    }
+    
+    main {
+        padding-left: 40px !important;
+        padding-right: 40px !important;
+    }
+}
+
+/* Component Styling */
+.navbar {
+    position: sticky !important;
+    top: 0;
+    z-index: 1050 !important; 
+}
+
+main {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: block;
+    padding: 20px;
+    transition: none !important;
+}
+
+.list-group-item {
+    border-left: none;
+    border-right: none;
+    font-weight: 500;
+}
+
+.list-group-item:first-child {
+    border-top: none;
+}
+
+/* Excel Tabs Styling */
+.excel-tabs-container {
+    display: flex;
+    background-color: #e1e1e1;
+    padding-top: 5px;
+    border-bottom: 1px solid #ccc;
+}
+.excel-tab {
+    background: white;
+    border: 1px solid #ccc;
+    border-bottom: none;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;    
+}
+.excel-tab.active {
+    border-bottom: 3px solid #217346;
+    font-weight: bold;
+}
+.excel-tab-add{
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    padding: 0 10px;
+    color: #666;
+    
+}
+
+/* Keeps the section inside the main content area */
+.section-content {
+    width: 100%;
+    padding: 20px;
+}
+
+/* Scrollable table container if list gets too long */
+.excel-table-wrapper {
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Standardizing the table cells */
+#productTable td, #productTable th {
+    padding: 12px;
+    vertical-align: middle;
+}
+
+/* Scrollable Table Progress Logic*/
+.table-responsive-scroll {
+    max-height: 450px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: white;
+
+}
+    /* Keeps the table headers while scrolling (ID, Name, Stoc,etc.) */
+.table-responsive-scroll thead th{
+    position: sticky;
+    top: 0;
+    background-color: #343a40 !important;
+    color: white !important;
+    z-index: 10;
+    border-top: none;
+}
+/* Custom Scrollbar  */
+.table-responsive-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+.table-responsive-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+.table-responsive-scroll::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+.table-responsive-scroll::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}   
+/* Style for the Add/Plus tab TRANSACTIONS */ 
+.excel-tab-add {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    font-weight: bold;
+    border: 1px solid #dee2e6;
+    border-bottom: none;
+    padding: 5px 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.excel-tab-add:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Product tabs — mirror excel-tab style */
+.product-tab {
+    background: white;
+    border: 1px solid #ccc;
+    border-bottom: none;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+.product-tab.active {
+    border-bottom: 3px solid #e6a817;
+    font-weight: bold;
+}
+.tabs-scroll-wrapper {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+}
+.excel-tabs-container {
+    display: inline-flex;
+    gap: 5px;
+}
+/* ===== MOBILE / WINDOWED VIEW IMPROVEMENTS ===== */
+
+/* Allow tables to scroll horizontally on narrow screens */
+.table-responsive-scroll {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Stack dashboard header (title + button) on small screens */
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+    }
+    .dashboard-header h2 {
+        font-size: 1.3rem;
+    }
+    .dashboard-header .btn {
+        width: 100%;
+    }
+
+    /* Full width search inputs */
+    .d-flex.justify-content-end.mb-2 {
+        justify-content: flex-start !important;
+    }
+    #inventorySearch, #transactionSearch, #adminSearch, #personnelSearch {
+        width: 100% !important;
+    }
+
+    /* Full width modals on small screens */
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+
+    /* Reduce section content padding */
+    .section-content {
+        padding: 0 5px;
+    }
+}
+
+/*Loading Screen*/
+
+/* Loading screen overlay */
+#loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease-out;
+}
+
+/* Centered content */
+.loading-content {
+    text-align: center;
+    max-width: 300px;
+}
+
+/* Animated logo */
+.loading-logo {
+    width: 120px;
+    height: auto;
+    margin-bottom: 30px;
+    animation: logoPulse 1.5s infinite ease-in-out;
+}
+
+@keyframes logoPulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.8; }
+}
+
+/* Progress bar container */
+.loading-bar-container {
+    position: relative;
+    width: 260px;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 20px auto;
+}
+
+/* Moving fish icon */
+.loading-fish {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: #0062cc;
+    z-index: 2;
+    animation: fishMove 2s infinite linear;
+    text-shadow: 0 0 2px white;
+}
+
+@keyframes fishMove {
+    0% { left: -5%; }
+    100% { left: 95%; }
+}
+
+/* Progress bar fill (optional background effect) */
+.loading-bar {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #0062cc, #00aaff);
+    animation: loadingProgress 1.5s forwards ease-in-out;  /* was 3s */
+}
+
+@keyframes loadingProgress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(0%); }
+}
+
+.loading-text {
+    margin-top: 20px;
+    font-size: 14px;
+    color: #555;
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+/* Hide loading screen when page is ready */
+#loading-screen.hide {
+    opacity: 0;
+    pointer-events: none;
+}
+.gap-2 {
+    gap: 0.5rem;
+}
+/* Ensure modals stack properly without blocking clicks on the front modal */
+.modal-backdrop.show ~ .modal {
+    z-index: 1060;
+}
+.modal-backdrop.show {
+    z-index: 1040;
+}
+@media (max-width: 768px) {
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+    .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+}

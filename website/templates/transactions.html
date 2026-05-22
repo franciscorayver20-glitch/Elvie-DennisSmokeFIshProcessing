@@ -1,0 +1,685 @@
+<div id="transactions" class="section-content" style="display: none">
+    <div class="dashboard-header d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-primary"><i class="fa fa-exchange mr-2"></i>Transactions Dashboard</h2>
+        <button class="btn btn-primary" onclick="openAddBoxModal()">
+            <i class="fa fa-plus"></i> Add Box
+        </button>
+    </div>
+
+    <!-- Date Sheet Tabs -->
+    <div class="tabs-scroll-wrapper">
+        <div class="excel-tabs-container mb-3" id="transaction-tabs" style="display: inline-flex; gap: 5px;">
+            {% for sheet in sheets %}
+            <button class="excel-tab {% if sheet.id == active_sheet_id %}active{% endif %}"
+                    onclick="switchSheet({{ sheet.id }})"
+                    oncontextmenu="showTabMenu(event, {{ sheet.id }}, '{{ sheet.label }}')">
+                {{ sheet.label }}
+            </button>
+            {% endfor %}
+            <button class="excel-tab excel-tab-add" onclick="addNewSheet()">+</button>
+        </div>
+    </div>
+
+
+<!-- Right-click Context Menu for Transaction Tabs -->
+<div id="tabContextMenu" style="
+    display: none;
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 2px 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    min-width: 160px;
+    font-size: 14px;">
+    <div id="ctxMenuSheetLabel" style="padding: 8px 14px; font-weight: bold; color: #555; border-bottom: 1px solid #eee; font-size: 12px;"></div>
+    <div onclick="ctxRemoveSheet()" style="padding: 8px 14px; cursor: pointer; display:flex; align-items:center; gap:8px; color:#6c757d;"
+         onmouseover="this.style.background='#f8f8f8'" onmouseout="this.style.background='white'">
+        <i class="fa fa-times"></i> Remove
+    </div>
+</div>
+
+    <!-- Search Bar -->
+    <div class="d-flex justify-content-end mb-2">
+        <input type="text" id="transactionSearch" name="transactionSearch" class="form-control form-control-sm"
+               style="width: 250px;" placeholder="Search box name or status..."
+               oninput="searchTransactions(this.value)">
+    </div>
+
+    <!-- Table -->
+    <div class="table-responsive-scroll" style="background: white; border: 1px solid #ddd; border-radius: 4px;">
+        <table class="table table-hover table-sm mb-0" id="transactionTable">
+            <thead class="thead-dark">
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th>Box Name</th>
+                    <th>Total Qty</th>
+                    <th>Total Price</th>
+                    <th>Status</th>
+                    <th>Date Issued</th>
+                    <th>Last Modified</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody id="transactionBody">
+                {% for t in transactions %}
+                <tr id="trow-{{ t.id }}"
+                    data-boxname="{{ t.box_name | lower }}"
+                    data-status="{{ t.status | lower }}"
+                    data-date="{{ t.date_created.strftime('%Y-%m-%d') }}">
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        <button class="btn btn-link p-0 font-weight-bold"
+                            onclick="viewBoxDetails('{{ t.id }}', '{{ t.box_name|replace("'", "\\'")|safe }}')">
+                            {{ t.box_name|escape }}
+                        </button>
+                    </td>
+                    <td>{{ t.quantity }}</td>
+                    <td>Php {{ "{:,.2f}".format(t.total_price) }}</td>
+                    <td>
+                      <select name="status" class="form-control form-control-sm" style="width: auto;"
+    onchange="updateBoxStatus('{{ t.id }}', this.value)">
+                            <option value="Initialized" {% if t.status == "Initialized" or t.status == "" %}selected{% endif %}>Initialized</option>
+                            <option value="Delivered"   {% if t.status == "Delivered" %}selected{% endif %}>Delivered</option>
+                            <option value="Cancelled"   {% if t.status == "Cancelled" %}selected{% endif %}>Cancelled</option>
+                        </select>
+                    </td>
+                    <td>{{ t.date_created.strftime('%m/%d/%Y %I:%M %p') }}</td>
+                    <td id="modified-{{ t.id }}">
+                        {{ t.last_modified.strftime('%m/%d/%Y %I:%M %p') if t.last_modified else '-' }}
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-link text-danger p-0"
+                                onclick="deleteTransaction('{{ t.id }}', '{{ t.box_name|replace("'", "\\'")|safe }}')">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr id="emptyRow">
+                    <td colspan="8" class="text-center text-muted py-5">No transactions for this date.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Box Modal -->
+<div class="modal fade" id="boxModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Box Entry: <span id="modalBoxName">New Box</span></h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalBoxId" name="modalBoxId" value="">
+                <div class="form-group">
+                    <label for="modalBoxNameInput">Box/Customer Name</label>
+                    <input type="text" id="modalBoxNameInput" name="modalBoxNameInput" class="form-control" placeholder="Enter name..." required>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead class="thead-light" style="position: sticky; top: 0;">
+                            <tr>
+                                <th>Product Name</th>
+                                <th style="width: 120px;">Qty</th>
+                                <th style="width: 60px;" class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="boxProductList"></tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-block mt-3" onclick="addNewProductRow()">
+                    <i class="fa fa-plus-circle"></i> Add Product to List
+                </button>
+            </div>
+            <div class="modal-footer">
+                <div class="mr-auto">
+                    <strong class="text-primary">Total Price: <span id="modalTotalPrice">Php 0.00</span></strong>
+                </div>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" onclick="submitBoxEntry()">Validate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeSheetId      = {{ active_sheet_id }};
+    let ctxTargetSheetId   = null;
+    let ctxTargetSheetLabel = '';
+    let currentSheetProducts = [];   // products for the current sheet
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function formatDateTime(dtStr) {
+        if (!dtStr) return '-';
+        const d = new Date(dtStr);
+        return d.toLocaleString('en-PH', {
+            month:  '2-digit', day:    '2-digit', year:   'numeric',
+            hour:   '2-digit', minute: '2-digit', hour12: true
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function escapeJsString(str) {
+        if (!str) return '';
+        return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    // ── Fetch products for the active transaction sheet (by date) ─────────────
+    async function fetchProductsForCurrentSheet() {
+    if (!activeSheetId) return;
+    try {
+        const sheetRes = await fetch(`/get-sheet-date/${activeSheetId}`);
+        const sheetData = await sheetRes.json();
+        if (!sheetData.date) return;
+
+        const encodedDate = encodeURIComponent(sheetData.date);
+        const psRes = await fetch(`/get-product-sheet-id-by-date?date=${encodedDate}`);
+        const psData = await psRes.json();
+        if (!psData.product_sheet_id) return;
+
+        const prodRes = await fetch(`/get-product-sheet/${psData.product_sheet_id}`);
+        const prodData = await prodRes.json();
+        currentSheetProducts = prodData.products || [];
+    } catch (err) {
+        console.warn('Failed to fetch products for sheet:', err);
+        currentSheetProducts = [];
+    }
+}
+
+    // ── Right-click context menu ──────────────────────────────────────────────
+    function showTabMenu(event, sheetId, sheetLabel) {
+        event.preventDefault();
+        ctxTargetSheetId    = sheetId;
+        ctxTargetSheetLabel = sheetLabel;
+
+        const menu = document.getElementById('tabContextMenu');
+        document.getElementById('ctxMenuSheetLabel').innerText = sheetLabel;
+        menu.style.display = 'block';
+        menu.style.left    = event.clientX + 'px';
+        menu.style.top     = event.clientY + 'px';
+    }
+
+    document.addEventListener('click', function () {
+    const transSection = document.getElementById('transactions');
+    if (transSection && transSection.style.display !== 'none') {
+        const menu = document.getElementById('tabContextMenu');
+        if (menu) menu.style.display = 'none';
+    }
+});
+
+    // ── Remove tab (archive) ─────────────────────────────────────────────────
+    function ctxRemoveSheet() {
+        if (!confirm(`Archive tab "${ctxTargetSheetLabel}"? You can restore it from History.`)) return;
+        fetch(`/archive-sheet/${ctxTargetSheetId}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const tabs = document.querySelectorAll('#transaction-tabs .excel-tab:not(.excel-tab-add)');
+                    tabs.forEach(tab => {
+                        if (tab.getAttribute('onclick') && tab.getAttribute('onclick').includes(`switchSheet(${ctxTargetSheetId})`)) {
+                            tab.remove();
+                        }
+                    });
+                    if (ctxTargetSheetId === activeSheetId) {
+                        const remaining = document.querySelectorAll('#transaction-tabs .excel-tab:not(.excel-tab-add)');
+                        if (remaining.length > 0) switchSheet(parseInt(remaining[0].getAttribute('onclick').match(/\d+/)[0]));
+                        else document.getElementById('transactionBody').innerHTML = '<tr><td colspan="8">No transactions</td></tr>';
+                    }
+                } else alert('Failed to archive.');
+            });
+    }
+
+    // ── Switch sheet WITHOUT full reload ──────────────────────────────────────
+    function switchSheet(sheetId) {
+        activeSheetId = sheetId;
+        localStorage.setItem("activeSection", "transactions");
+
+        document.querySelectorAll('#transaction-tabs .excel-tab:not(.excel-tab-add)').forEach(tab => {
+            tab.classList.remove('active');
+            if (tab.getAttribute('onclick') && tab.getAttribute('onclick').includes(`switchSheet(${sheetId})`)) {
+                tab.classList.add('active');
+            }
+        });
+
+        history.pushState(null, '', `/?sheet_id=${sheetId}#transactions`);
+
+        // Refresh products for this sheet
+        fetchProductsForCurrentSheet();
+
+        fetch(`/get-sheet-transactions/${sheetId}`)
+            .then(res => res.json())
+            .then(data => renderTransactionTable(data.transactions));
+    }
+
+    // ── Render transaction rows ───────────────────────────────────────────────
+    function renderTransactionTable(transactions) {
+        const tbody = document.getElementById('transactionBody');
+        if (!transactions || transactions.length === 0) {
+            tbody.innerHTML = `
+                <tr id="emptyRow">
+                    <td colspan="8" class="text-center text-muted py-5">No transactions for this date.</td>
+                </table>`;
+            return;
+        }
+
+        tbody.innerHTML = transactions.map((t, i) => {
+            const safeBoxName = escapeJsString(t.box_name);
+            return `
+            <tr id="trow-${t.id}"
+                data-boxname="${(t.box_name || '').toLowerCase()}"
+                data-status="${(t.status || '').toLowerCase()}"
+                data-date="${t.date_created ? t.date_created.split('T')[0] : ''}">
+                <td>${i + 1}</td>
+                <td>
+                    <button class="btn btn-link p-0 font-weight-bold"
+                        onclick="viewBoxDetails('${t.id}', '${safeBoxName}')">
+                        ${escapeHtml(t.box_name)}
+                    </button>
+                </td>
+                <td>${t.quantity}</td>
+                <td>Php ${parseFloat(t.total_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                <td>
+                    <select name="status" id="status-${t.id}" class="form-control form-control-sm" style="width:auto;"
+    onchange="updateBoxStatus('${t.id}', this.value)">
+                        <option value="Initialized" ${t.status === 'Initialized' ? 'selected' : ''}>Initialized</option>
+                        <option value="Delivered"   ${t.status === 'Delivered'   ? 'selected' : ''}>Delivered</option>
+                        <option value="Cancelled"   ${t.status === 'Cancelled'   ? 'selected' : ''}>Cancelled</option>
+                    </select>
+                </td>
+                <td>${formatDateTime(t.date_created)}</td>
+                <td id="modified-${t.id}">${formatDateTime(t.last_modified)}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-link text-danger p-0"
+                            onclick="deleteTransaction('${t.id}', '${safeBoxName}')">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ========== REAL-TIME POLLING FOR TRANSACTIONS (refresh table only) ==========
+    let transactionRefreshInterval = null;
+
+    function startTransactionPolling() {
+        if (transactionRefreshInterval) clearInterval(transactionRefreshInterval);
+        transactionRefreshInterval = setInterval(() => {
+            const transSection = document.getElementById('transactions');
+            if (transSection && transSection.style.display !== 'none') {
+                // Refresh transaction table
+                fetch(`/get-sheet-transactions/${activeSheetId}`)
+                    .then(res => res.json())
+                    .then(data => renderTransactionTable(data.transactions))
+                    .catch(err => console.warn('Transaction polling error:', err));
+                // Also refresh products for this sheet (in case someone added products elsewhere)
+                fetchProductsForCurrentSheet();
+            }
+        }, 5000);
+    }
+
+    function stopTransactionPolling() {
+        if (transactionRefreshInterval) {
+            clearInterval(transactionRefreshInterval);
+            transactionRefreshInterval = null;
+        }
+    }
+
+    startTransactionPolling();
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopTransactionPolling();
+        else startTransactionPolling();
+    });
+
+    // ── Add new sheet tab ─────────────────────────────────────────────────────
+    function addNewSheet() {
+        fetch('/add-sheet', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const addBtn = document.querySelector('.excel-tab-add');
+                    const newTab = document.createElement('button');
+                    newTab.className  = 'excel-tab';
+                    newTab.innerText  = data.label;
+                    newTab.setAttribute('onclick',        `switchSheet(${data.sheet_id})`);
+                    newTab.setAttribute('oncontextmenu',  `showTabMenu(event, ${data.sheet_id}, '${data.label}')`);
+                    addBtn.parentNode.insertBefore(newTab, addBtn);
+                    switchSheet(data.sheet_id);
+                } else {
+                    alert('Failed to create sheet: ' + data.message);
+                }
+            });
+    }
+
+    // ── Delete transaction ────────────────────────────────────────────────────
+    function deleteTransaction(id, name) {
+        if (!confirm(`Delete box "${name}"? This cannot be undone.`)) return;
+        fetch(`/delete-transaction/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = document.getElementById(`trow-${id}`);
+                    if (row) row.remove();
+                    refreshProductStocks();
+                    const tbody = document.getElementById('transactionBody');
+                    if (!tbody.querySelector('tr[data-boxname]')) {
+                        tbody.innerHTML = `<tr id="emptyRow"><td colspan="8" class="text-center text-muted py-5">No transactions for this date.</td></tr>`;
+                    }
+                } else {
+                    alert('Failed to delete: ' + data.message);
+                }
+            });
+    }
+
+    // ── Submit box entry ──────────────────────────────────────────────────────
+    function submitBoxEntry() {
+        const boxName = document.getElementById('modalBoxNameInput').value.trim();
+        const boxId   = document.getElementById('modalBoxId').value;
+
+        if (!boxName) { alert('Please enter a Box/Customer Name.'); return; }
+
+        const rows = document.querySelectorAll('#boxProductList tr');
+        const formData = new FormData();
+        formData.append('box_name', boxName);
+        formData.append('sheet_id', activeSheetId);
+
+        let hasProduct = false;
+        rows.forEach(row => {
+            const select = row.querySelector('.product-dropdown');
+            const qty    = row.querySelector('.qty-input');
+            if (select && select.value) {
+                formData.append('product_ids[]', select.value);
+                formData.append('quantities[]', qty ? qty.value : 1);
+                hasProduct = true;
+            }
+        });
+
+        if (!hasProduct) { alert('Please add at least one product.'); return; }
+
+        const url = boxId ? `/update-transaction/${boxId}` : "{{ url_for('views.add_transaction') }}";
+
+        fetch(url, { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                
+            if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+                $('#boxModal').modal('hide');
+                    refreshProductStocks();
+
+                    if (!boxId && data.transaction) {
+                        // NEW box — inject row directly
+                        const t    = data.transaction;
+                        const tbody = document.getElementById('transactionBody');
+                        const emptyRow = document.getElementById('emptyRow');
+                        if (emptyRow) emptyRow.remove();
+
+                        const rowCount = tbody.querySelectorAll('tr[data-boxname]').length + 1;
+                        const newRow   = document.createElement('tr');
+                        newRow.id = `trow-${t.id}`;
+                        newRow.setAttribute('data-boxname', t.box_name.toLowerCase());
+                        newRow.setAttribute('data-status',  t.status.toLowerCase());
+                        newRow.setAttribute('data-date',    t.date_created.split('T')[0]);
+
+                        const fmt = (dtStr) => {
+                            if (!dtStr) return '-';
+                            const d = new Date(dtStr);
+                            return d.toLocaleString('en-PH', {
+                                month: '2-digit', day: '2-digit', year: 'numeric',
+                                hour:  '2-digit', minute: '2-digit', hour12: true
+                            });
+                        };
+
+                        const safeBoxName = escapeJsString(t.box_name);
+                        newRow.innerHTML = `
+                            <td>${rowCount}</td>
+                            <td>
+                                <button class="btn btn-link p-0 font-weight-bold"
+                                    onclick="viewBoxDetails('${t.id}', '${safeBoxName}')">
+                                    ${escapeHtml(t.box_name)}
+                                </button>
+                            </td>
+                            <td>${t.quantity}</td>
+                            <td>Php ${parseFloat(t.total_price).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                            <td>
+                                <select name="status" class="form-control form-control-sm" style="width:auto;"
+    onchange="updateBoxStatus('${t.id}', this.value)">
+                                    <option value="Initialized" selected>Initialized</option>
+                                    <option value="Delivered">Delivered</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </td>
+                            <td>${fmt(t.date_created)}</td>
+                            <td id="modified-${t.id}">${fmt(t.last_modified)}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-link text-danger p-0"
+                                        onclick="deleteTransaction('${t.id}', '${safeBoxName}')">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>`;
+                        tbody.appendChild(newRow);
+                    } else {
+                        // EDIT — update last_modified cell and re-fetch table
+                        if (data.transaction_id && data.last_modified) {
+                            const cell = document.getElementById(`modified-${data.transaction_id}`);
+                            if (cell) {
+                                const d = new Date(data.last_modified);
+                                cell.innerText = d.toLocaleString('en-PH', {
+                                    month: '2-digit', day: '2-digit', year: 'numeric',
+                                    hour:  '2-digit', minute: '2-digit', hour12: true
+                                });
+                            }
+                        }
+                        fetch(`/get-sheet-transactions/${activeSheetId}`)
+                            .then(res => res.json())
+                            .then(d => renderTransactionTable(d.transactions));
+                        refreshProductStocks();
+                    }
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(err => alert('Failed: ' + err));
+    }
+
+    // ── Dropdown sync ─────────────────────────────────────────────────────────
+    function getSelectedProductIds(excludeDropdown = null) {
+        const dropdowns = document.querySelectorAll('.product-dropdown');
+        const selected  = new Set();
+        dropdowns.forEach(dd => {
+            if (dd !== excludeDropdown && dd.value) selected.add(dd.value);
+        });
+        return selected;
+    }
+
+    function syncDropdowns() {
+        const dropdowns = document.querySelectorAll('.product-dropdown');
+        dropdowns.forEach(dd => {
+            const takenIds = getSelectedProductIds(dd);
+            Array.from(dd.options).forEach(opt => {
+                if (opt.value === '') return;
+                opt.disabled = takenIds.has(opt.value);
+            });
+        });
+        updateModalTotal();
+    }
+
+    // ── Add a new product row in the box modal (uses currentSheetProducts) ─────
+    function addNewProductRow(productId = '', qty = 1) {
+        const listBody = document.getElementById('boxProductList');
+        if (!listBody) return;
+
+        const rowId = 'row-' + Date.now() + Math.floor(Math.random() * 1000);
+        let optionsHtml = `<option value="" disabled ${productId === '' ? 'selected' : ''}>Select Product...</option>`;
+        currentSheetProducts.forEach(p => {
+            const selected = String(productId) === String(p.id) ? 'selected' : '';
+            const safeName = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            optionsHtml += `<option value="${p.id}" data-price="${p.price}" ${selected}>${safeName} (${p.category})</option>`;
+        });
+
+        listBody.insertAdjacentHTML('beforeend', `
+            <tr id="${rowId}">
+                <td>
+                    <select name="product_ids[]" class="form-control form-control-sm product-dropdown"
+                            onchange="syncDropdowns()">
+                        ${optionsHtml}
+                    </select>
+                </td>
+                <td>
+                    <input name="quantities[]" type="number" class="form-control form-control-sm qty-input"
+                           value="${qty}" min="1" oninput="updateModalTotal()">
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-link text-danger p-0"
+                            onclick="document.getElementById('${rowId}').remove(); syncDropdowns();">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </td>
+            </tr>`);
+        syncDropdowns();
+    }
+
+    // ── View box details (edit mode) ──────────────────────────────────────────
+    function viewBoxDetails(boxId, boxName) {
+    document.getElementById('modalBoxName').innerText      = boxName;
+    document.getElementById('modalBoxNameInput').value     = boxName;
+    document.getElementById('modalBoxId').value            = boxId;
+    document.getElementById('boxProductList').innerHTML    = '<tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>';
+    $('#boxModal').modal('show');
+
+    // Ensure products are loaded before populating the modal
+    fetchProductsForCurrentSheet().then(() => {
+        fetch(`/get-box-details/${boxId}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('boxProductList').innerHTML = '';
+                if (data.products && data.products.length > 0) {
+                    data.products.forEach(item => addNewProductRow(item.id, item.quantity));
+                } else {
+                    addNewProductRow();
+                }
+                updateModalTotal();
+            })
+            .catch(() => {
+                document.getElementById('boxProductList').innerHTML = '<tr><td colspan="3" class="text-danger text-center">Failed to load.</td></tr>';
+            });
+    });
+}
+
+    // ── Open add box modal ───────────────────────────────────────────────────
+    function openAddBoxModal() {
+    fetchProductsForCurrentSheet().then(() => {
+        document.getElementById('modalBoxName').innerText = "New Box Instance";
+        document.getElementById('modalBoxNameInput').value = "";
+        document.getElementById('modalBoxId').value = "";
+        document.getElementById('boxProductList').innerHTML = "";
+        document.getElementById('modalTotalPrice').innerText = "Php 0.00";
+        addNewProductRow();
+        $('#boxModal').modal('show');
+    });
+}
+
+    // ── Update total price inside box modal ───────────────────────────────────
+    function updateModalTotal() {
+        let total = 0;
+        const rows = document.querySelectorAll('#boxProductList tr');
+        rows.forEach(row => {
+            const dropdown = row.querySelector('.product-dropdown');
+            const qtyInput = row.querySelector('.qty-input');
+            const selectedOption = dropdown.options[dropdown.selectedIndex];
+            if (selectedOption && selectedOption.dataset.price) {
+                const price = parseFloat(selectedOption.dataset.price);
+                const qty = parseInt(qtyInput.value) || 0;
+                total += (price * qty);
+            }
+        });
+        document.getElementById('modalTotalPrice').innerText = `Php ${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    }
+
+    // ── Search transactions ───────────────────────────────────────────────────
+    function searchTransactions(query) {
+        const q = query.toLowerCase().trim();
+        const rows = document.querySelectorAll('#transactionBody tr[data-boxname]');
+        let anyVisible = false;
+        rows.forEach(row => {
+            const match = (row.dataset.boxname || '').includes(q) ||
+                          (row.dataset.status  || '').includes(q) ||
+                          (row.dataset.date    || '').includes(q);
+            row.style.display = match ? '' : 'none';
+            if (match) anyVisible = true;
+        });
+        const emptyRow = document.getElementById('emptyRow');
+        if (emptyRow) emptyRow.style.display = anyVisible ? 'none' : '';
+    }
+
+    // ── Modal reset when closed ───────────────────────────────────────────────
+    document.getElementById('boxModal').addEventListener('hidden.bs.modal', function () {
+        document.getElementById('boxProductList').innerHTML  = "";
+        document.getElementById('modalTotalPrice').innerText = "Php 0.00";
+        document.getElementById('modalBoxName').innerText    = "New Box";
+        document.getElementById('modalBoxNameInput').value   = "";
+        document.getElementById('modalBoxId').value          = "";
+    });
+
+    // ── Refresh product stock display (inventory page) ────────────────────────
+    function refreshProductStocks() {
+    fetch(`/get-active-product-sheet-for-transaction/${activeSheetId}`)
+        .then(res => res.json())
+        .then(info => {
+            if (!info.product_sheet_id) return Promise.reject('No product sheet');
+            return fetch(`/get-product-stocks/${info.product_sheet_id}`);
+        })
+        .then(res => res && res.json())
+        .then(data => {
+            if (!data || !data.products) return;
+            data.products.forEach(p => {
+                const row = document.getElementById(`row-${p.id}`);
+                // Ensure it's an actual table row with cells
+                if (!row || !row.tagName || row.tagName !== 'TR') return;
+                if (!row.cells || row.cells.length < 6) return;
+
+                const stockCell = row.cells[4];
+                const statusCell = row.cells[5];
+                if (stockCell) {
+                    const unit = stockCell.innerText.trim().split(' ')[1] || '';
+                    stockCell.innerText = `${p.stock} ${unit}`;
+                }
+                if (statusCell) {
+                    const badgeClass = p.stock > 10 ? 'badge-success'
+                        : p.stock > 0 ? 'badge-warning' : 'badge-danger';
+                    statusCell.innerHTML = `<span class="badge ${badgeClass}">${p.status}</span>`;
+                }
+            });
+        })
+        .catch(err => console.warn('refreshProductStocks skipped:', err));
+}
+
+    // ── Initial fetch for products when page loads ────────────────────────────
+    fetchProductsForCurrentSheet();
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof $ !== 'undefined') {
+            $('#boxModal').on('hide.bs.modal', function () {
+                if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+            });
+        }
+    });
+</script>

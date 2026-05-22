@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" href="data:,">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>{% block title %}Home{% endblock %}</title>
+    <style>
+        @media (max-width: 768px) {
+            .navbar-brand { font-size: 0.9rem; white-space: normal; word-break: break-word; }
+            .navbar-brand img { height: 24px !important; margin-right: 6px; }
+            .navbar-nav .nav-link { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+        }
+        @media (max-width: 480px) {
+            .navbar-brand { font-size: 0.75rem; }
+            .navbar-brand img { height: 20px !important; }
+            .navbar-nav .nav-link { font-size: 0.75rem; padding: 0.5rem 0.5rem; }
+        }
+        .modal-backdrop { z-index: 1040 !important; }
+        .modal-backdrop ~ .modal { z-index: 1050; }
+        .modal { z-index: 1050; }
+        .modal.show { z-index: 1060; }
+    </style>
+</head>
+<body>
+
+<!-- SAFE getElementById – no warnings for expected missing elements -->
+<script>
+    (function() {
+        const authPaths = ['/login', '/sign-up', '/forgot-password', '/reset-password'];
+        const isAuthPage = authPaths.some(p => window.location.pathname === p);
+        const noWarnIds = ['emptyRow', 'productTabContextMenu', 'tabContextMenu', 'personnelEmptyRow', 'accountEmptyRow', 'inventoryEmptyRow'];
+
+        const original = document.getElementById;
+        document.getElementById = function(id) {
+            const el = original.call(this, id);
+            if (!el) {
+                if (!isAuthPage && !noWarnIds.includes(id)) {
+                    console.warn(`Element #${id} not found – returning dummy`);
+                }
+                return {
+                    style: {},
+                    getAttribute: () => null,
+                    setAttribute: () => {},
+                    addEventListener: () => {},
+                    removeEventListener: () => {},
+                    remove: () => {},
+                    classList: { add: () => {}, remove: () => {}, contains: () => false }
+                };
+            }
+            return el;
+        };
+    })();
+</script>
+
+<!-- Disable polling on auth pages -->
+<script>
+    (function() {
+        const authPaths = ['/login', '/sign-up', '/forgot-password', '/reset-password'];
+        const isAuthPage = authPaths.some(p => window.location.pathname.includes(p));
+        if (isAuthPage) {
+            window.startAccountPolling = function() {};
+            window.startInventoryPolling = function() {};
+            window.startPersonnelPolling = function() {};
+            window.startTransactionPolling = function() {};
+            if (window.accountRefreshInterval) clearInterval(window.accountRefreshInterval);
+            if (window.inventoryRefreshInterval) clearInterval(window.inventoryRefreshInterval);
+            if (window.personnelRefreshInterval) clearInterval(window.personnelRefreshInterval);
+            if (window.transactionRefreshInterval) clearInterval(window.transactionRefreshInterval);
+        }
+    })();
+</script>
+
+<!-- Loading screen -->
+<div id="loading-screen">
+    <div class="loading-content">
+        <img src="{{ url_for('static', filename='businessLogo.png') }}" alt="Logo" class="loading-logo">
+        <div class="loading-bar-container">
+            <div class="loading-fish"><i class="fa fa-fish"></i></div>
+            <div class="loading-bar"></div>
+        </div>
+        <p class="loading-text">Loading, please wait...</p>
+    </div>
+</div>
+
+<nav class="navbar navbar-dark bg-dark sticky-top">   
+    <div class="container-fluid d-flex align-items-center">
+        {% if current_user.is_authenticated %}
+        <button class="navbar-toggler d-lg-none mr-2" type="button" data-toggle="collapse" data-target="#mainSidebar">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        {% endif %}
+        <img src="{{ url_for('static', filename='businessLogo.png') }}" alt="Logo" height="30" style="border-radius: 4px; margin-right: 8px;">
+        <span class="navbar-brand mb-0 h1 flex-grow-1 text-truncate">Dennis Smoke Fish Processing</span>
+        <div class="navbar-nav flex-row">
+            {% if current_user.is_authenticated %}
+                <a class="nav-item nav-link px-2 d-none d-lg-block" href="javascript:void(0)" onclick="showSection('home-section')">Home</a>
+                {% if current_user.is_admin %}
+                    <a class="nav-item nav-link px-2 d-none d-lg-block" href="javascript:void(0)" onclick="showSection('admin-section')">Admin Panel</a>
+                {% endif %}
+                <a class="nav-item nav-link px-2 d-none d-lg-block" href="/logout">Logout</a>
+            {% else %}
+                <a class="nav-item nav-link px-2" href="/login">Login</a>
+                <a class="nav-item nav-link px-2" href="/sign-up">Sign Up</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissable fade show mb-0" role="alert">              
+            {{ message }}           
+            <button type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span></button>   
+        </div>        
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="container-fluid">
+    <div class="row d-flex flex-nowrap">
+        {% if current_user.is_authenticated %}
+        <nav id="mainSidebar" class="collapse show d-lg-block bg-light border-right flex-column" style="min-width: 250px; min-height: 100vh;">                  
+            <div class="d-lg-none list-group list-group-flush mb-3">
+                <a class="list-group-item list-group-item-action py-3 text-primary" href="javascript:void(0)" onclick="showSection('home-section')"><i class="fa fa-home mr-2"></i> Home</a>
+                {% if current_user.is_admin %}
+                    <a class="list-group-item list-group-item-action py-3 text-info" href="javascript:void(0)" onclick="showSection('admin-section')"><i class="fa fa-lock mr-2"></i> Admin Panel</a>
+                {% endif %}
+                <a class="list-group-item list-group-item-action py-3 text-danger" href="/logout"><i class="fa fa-sign-out mr-2"></i> Logout</a>
+                <hr>
+            </div>
+            <div class="list-group list-group-flush">
+                <button type="button" class="list-group-item list-group-item-action py-3" onclick="showSection('transactions')"><i class="fa fa-exchange mr-2"></i> Transactions</button>
+                <button type="button" class="list-group-item list-group-item-action py-3" onclick="showSection('history')"><i class="fa fa-history mr-2"></i> Transaction History</button>     
+                <button type="button" class="list-group-item list-group-item-action py-3" onclick="showSection('inventory')"><i class="fa fa-archive mr-2"></i> Products</button>
+                <button type="button" class="list-group-item list-group-item-action py-3" onclick="showSection('personnel')"><i class="fa fa-users mr-2"></i> Personnel</button>
+            </div>
+            <div class="list-group list-group-flush mt-auto pb-4">
+                <hr>
+                <button type="button" class="list-group-item list-group-item-action py-3" onclick="showSection('business')"><i class="fa fa-info-circle mr-2"></i> Business Info</button>
+            </div> 
+        </nav>     
+        {% endif %} 
+
+        <main class="col w-100 mt-4 px-4 text-left">
+            <div id="home-section" class="section-content" style="display: block;">
+                {% block content %}{% endblock %}
+            </div>
+            {% if current_user.is_authenticated %}
+                {% if current_user.is_admin %}{% include "admin.html"%}{% endif %}
+                {% include "transactions.html" %}
+                {% include "history.html" %}
+                {% include "inventory.html" %}
+                {% include "personnel.html" %}
+                {% include "business.html" %}
+            {% endif %}
+        </main>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='index.js') }}"></script>    
+
+<script>
+    $(document).ready(function() {
+        $('.modal').on('shown.bs.modal', function () {
+            var $firstFocusable = $(this).find('input:not([type="hidden"]), button, select, textarea, a[href]').first();
+            if ($firstFocusable.length) {
+                $firstFocusable.focus();
+            } else {
+                if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+            }
+        });
+    });
+</script>
+
+
+
+<!-- Loading screen control -->
+<script>
+    const loader = document.getElementById('loading-screen');
+    if (loader) {
+        if (sessionStorage.getItem('justLoggedIn') !== 'true') {
+            loader.classList.add('hide'); 
+            setTimeout(() => { if(loader) loader.remove(); }, 100);
+        } else {
+            sessionStorage.removeItem('justLoggedIn');
+            loader.classList.remove('hide'); 
+            loader.style.display = 'flex';
+            const loadingBar = document.querySelector('.loading-bar');
+            if (loadingBar) {
+                loadingBar.addEventListener('animationend', function onEnd() {
+                    loader.classList.add('hide');
+                    setTimeout(() => { if(loader) loader.remove(); }, 500);
+                    loadingBar.removeEventListener('animationend', onEnd);
+                });
+            } else {
+                setTimeout(() => { if(loader) { loader.classList.add('hide'); setTimeout(() => loader.remove(), 500); } }, 1500);
+            }
+        }
+    }
+</script>
+
+<!-- History Module – only runs on dashboard pages -->
+{% if current_user.is_authenticated %}
+<script>
+    const isAdmin = {{ 'true' if current_user.is_admin else 'false' }};
+
+    let currentHistorySheetId = null;
+    let currentHistoryProductSheetId = null;
+    let currentHistorySheetProducts = [];
+    let productListRefreshInterval = null;
+    let boxModalOpen = false;
+    let productModalOpen = false;
+
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
+    function escapeJsString(str) { if (!str) return ''; return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+    function formatDateTime(dtStr) { if (!dtStr) return '-'; const d = new Date(dtStr); return d.toLocaleString('en-PH', { month:'2-digit', day:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true }); }
+    function formatProductDateTime(dtStr) { return formatDateTime(dtStr); }
+
+    async function getProductsForTransactionSheet(sheetId) {
+        try {
+            const sheetRes = await fetch(`/get-sheet-date/${sheetId}`);
+            const sheetData = await sheetRes.json();
+            if (!sheetData.date) return [];
+            const encodedDate = encodeURIComponent(sheetData.date);
+            const psRes = await fetch(`/get-product-sheet-id-by-date?date=${encodedDate}`);
+            const psData = await psRes.json();
+            if (!psData.product_sheet_id) return [];
+            const prodRes = await fetch(`/get-product-sheet/${psData.product_sheet_id}`);
+            const prodData = await prodRes.json();
+            return prodData.products || [];
+        } catch (err) {
+            console.warn('Failed to fetch products for history sheet:', err);
+            return [];
+        }
+    }
+
+    function refreshProductListAndDropdowns() {
+        if (!currentHistorySheetId) return;
+        getProductsForTransactionSheet(currentHistorySheetId).then(products => {
+            currentHistorySheetProducts = products;
+            if (boxModalOpen) {
+                const dropdowns = document.querySelectorAll('#historyBoxProductList .product-dropdown');
+                dropdowns.forEach(dd => {
+                    const currentVal = dd.value;
+                    let options = '<option value="" disabled>Select Product...</option>';
+                    currentHistorySheetProducts.forEach(p => {
+                        const selected = (String(currentVal) === String(p.id)) ? 'selected' : '';
+                        const safeName = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        options += `<option value="${p.id}" data-price="${p.price}" ${selected}>${safeName} (${p.category})</option>`;
+                    });
+                    dd.innerHTML = options;
+                });
+                syncHistoryDropdowns();
+                updateHistoryModalTotal();
+            }
+        });
+    }
+
+    function startProductListPolling() { if (productListRefreshInterval) clearInterval(productListRefreshInterval); productListRefreshInterval = setInterval(refreshProductListAndDropdowns, 5000); }
+    function stopProductListPolling() { if (productListRefreshInterval) { clearInterval(productListRefreshInterval); productListRefreshInterval = null; } }
+
+    function loadHistory() {
+        fetch('/get-archived-sheets').then(res => res.json()).then(data => {
+            const transDiv = document.getElementById('history-transaction-buttons');
+            const prodDiv = document.getElementById('history-product-buttons');
+            if (!transDiv || !prodDiv) return;
+            transDiv.innerHTML = '';
+            prodDiv.innerHTML = '';
+            const todayStr = new Date().toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric'});
+            
+            data.transaction_sheets.forEach(sheet => {
+                if (!sheet.id) return;
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-outline-primary btn-sm';
+                btn.innerHTML = `<i class="fa fa-file-excel-o mr-1"></i> ${sheet.label}`;
+                btn.onclick = () => openHistoryTransactionSheet(sheet.id, sheet.label, sheet.date === todayStr);
+                btn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    if (confirm(`Restore archived transaction sheet "${sheet.label}" to dashboard?`))
+                        restoreSheet('transaction', sheet.id);
+                };
+                transDiv.appendChild(btn);
+            });
+            if (!data.transaction_sheets.length) transDiv.innerHTML = '<div class="text-muted">No archived transaction sheets.</div>';
+            
+            data.product_sheets.forEach(sheet => {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-outline-success btn-sm';
+                btn.innerHTML = `<i class="fa fa-file-excel-o mr-1"></i> ${sheet.label}`;
+                btn.onclick = () => openHistoryProductSheet(sheet.id, sheet.label, sheet.date === todayStr);
+                btn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    if (confirm(`Restore archived product sheet "${sheet.label}" to dashboard?`))
+                        restoreSheet('product', sheet.id);
+                };
+                prodDiv.appendChild(btn);
+            });
+            if (!data.product_sheets.length) prodDiv.innerHTML = '<div class="text-muted">No archived product sheets.</div>';
+            
+            const transLoading = document.getElementById('history-transaction-loading');
+            const prodLoading = document.getElementById('history-product-loading');
+            if (transLoading) transLoading.style.display = 'none';
+            if (prodLoading) prodLoading.style.display = 'none';
+        });
+    }
+
+    function restoreSheet(type, sheetId) {
+        const url = type === 'transaction' ? `/restore-sheet/${sheetId}` : `/restore-product-sheet/${sheetId}`;
+        fetch(url, { method: 'POST' }).then(res => res.json()).then(data => { if (data.status === 'success') { alert('Sheet restored to dashboard. Refreshing...'); location.reload(); } else alert('Restore failed: ' + (data.message || 'Unknown error')); });
+    }
+
+    function openHistoryTransactionSheet(sheetId, label, canRestore) {
+        if (!sheetId) { console.error('Invalid sheetId'); return; }
+        currentHistorySheetId = sheetId;
+        fetch(`/get-sheet-transactions/${sheetId}`)
+            .then(res => res.json())
+            .then(data => {
+                renderHistoryTransactionTable(data.transactions, sheetId);
+                const sheetLabelSpan = document.getElementById('historyTransSheetLabel');
+                if (sheetLabelSpan) sheetLabelSpan.innerText = label;
+                const restoreBtn = document.getElementById('historyTransRestoreBtn');
+                if (restoreBtn) {
+                    if (canRestore) {
+                        restoreBtn.style.display = 'inline-block';
+                        restoreBtn.onclick = () => restoreSheet('transaction', sheetId);
+                    } else {
+                        restoreBtn.style.display = 'none';
+                    }
+                }
+                const exportBtn = document.getElementById('historyTransExportExcel');
+                if (exportBtn) exportBtn.onclick = () => window.location.href = `/export-history-transaction-sheet/${sheetId}`;
+                $('#historyTransactionModal').modal('show');
+            })
+            .catch(err => console.error('Failed to load transactions:', err));
+    }
+
+    function renderHistoryTransactionTable(transactions, sheetId) {
+        const container = document.getElementById('historyTransTableContainer');
+        if (!container) return;
+        if (!transactions.length) { container.innerHTML = '<p>No transactions for this sheet.</p>'; return; }
+        let html = `<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Box Name</th><th>Total Qty</th><th>Total Price</th><th>Status</th><th>Date Issued</th><th>Last Modified</th><th>Action</th></tr></thead><tbody>`;
+        transactions.forEach(t => {
+            html += `<tr id="hist-trans-row-${t.id}">
+                <td><button class="btn btn-link p-0" onclick="viewHistoryBoxDetails(${t.id}, '${escapeJsString(t.box_name)}', ${sheetId})">${escapeHtml(t.box_name)}</button></td>
+                <td>${t.quantity}</td>
+                <td>Php ${parseFloat(t.total_price).toLocaleString()}</td>
+                <td>${t.status}</td>
+                <td>${formatDateTime(t.date_created)}</td>
+                <td id="hist-modified-${t.id}">${formatDateTime(t.last_modified)}</td>
+                <td>${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteHistoryTransaction(${t.id}, '${escapeJsString(t.box_name)}')"><i class="fa fa-trash"></i></button>` : 'Read only'}</td>
+            </tr>`;
+        });
+        html += `</tbody>}</div>`;
+        if (isAdmin) html += `<button class="btn btn-primary mt-2" onclick="openAddHistoryTransactionModal(${sheetId})"><i class="fa fa-plus"></i> Add Box</button>`;
+        container.innerHTML = html;
+    }
+
+    function viewHistoryBoxDetails(boxId, boxName, sheetId) {
+        $('#historyTransactionModal').modal('hide');
+        window.currentHistorySheetId = sheetId;
+        getProductsForTransactionSheet(sheetId).then(products => {
+            currentHistorySheetProducts = products;
+            fetch(`/get-box-details/${boxId}`).then(res => res.json()).then(data => {
+                const modalBoxNameSpan = document.getElementById('historyModalBoxName');
+                if (modalBoxNameSpan) modalBoxNameSpan.innerText = boxName;
+                const modalBoxNameInput = document.getElementById('historyModalBoxNameInput');
+                if (modalBoxNameInput) modalBoxNameInput.value = boxName;
+                const modalBoxId = document.getElementById('historyModalBoxId');
+                if (modalBoxId) modalBoxId.value = boxId;
+                const listBody = document.getElementById('historyBoxProductList');
+                if (listBody) {
+                    listBody.innerHTML = '';
+                    if (data.products && data.products.length) {
+                        data.products.forEach(item => addHistoryProductRow(item.id, item.quantity, products));
+                    } else {
+                        addHistoryProductRow('', 1, products);
+                    }
+                }
+                updateHistoryModalTotal();
+                setTimeout(() => $('#historyBoxModal').modal('show'), 100);
+            });
+        });
+    }
+
+    function openAddHistoryTransactionModal(sheetId) {
+        $('#historyTransactionModal').modal('hide');
+        getProductsForTransactionSheet(sheetId).then(products => {
+            currentHistorySheetProducts = products;
+            const modalBoxNameSpan = document.getElementById('historyModalBoxName');
+            if (modalBoxNameSpan) modalBoxNameSpan.innerText = "New Box";
+            const modalBoxNameInput = document.getElementById('historyModalBoxNameInput');
+            if (modalBoxNameInput) modalBoxNameInput.value = "";
+            const modalBoxId = document.getElementById('historyModalBoxId');
+            if (modalBoxId) modalBoxId.value = "";
+            const listBody = document.getElementById('historyBoxProductList');
+            if (listBody) listBody.innerHTML = "";
+            const totalSpan = document.getElementById('historyModalTotalPrice');
+            if (totalSpan) totalSpan.innerText = "Php 0.00";
+            addHistoryProductRow('', 1, products);
+            setTimeout(() => $('#historyBoxModal').modal('show'), 100);
+            window.currentHistorySheetId = sheetId;
+        });
+    }
+
+    function addHistoryProductRow(productId = '', qty = 1, productList = null) {
+        const listBody = document.getElementById('historyBoxProductList');
+        if (!listBody) return;
+        const rowId = 'history-row-' + Date.now() + Math.floor(Math.random() * 1000);
+        const products = productList || currentHistorySheetProducts;
+        let optionsHtml = `<option value="" disabled ${productId === '' ? 'selected' : ''}>Select Product...</option>`;
+        products.forEach(p => {
+            const selected = String(productId) === String(p.id) ? 'selected' : '';
+            const safeName = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            optionsHtml += `<option value="${p.id}" data-price="${p.price}" ${selected}>${safeName} (${p.category})</option>`;
+        });
+        const html = `<tr id="${rowId}"><td><select class="form-control form-control-sm product-dropdown" onchange="syncHistoryDropdowns()">${optionsHtml}</select></td>
+            <td><input type="number" class="form-control form-control-sm qty-input" value="${qty}" min="1" oninput="updateHistoryModalTotal()"></td>
+            <td class="text-center"><button class="btn btn-link text-danger p-0" onclick="document.getElementById('${rowId}').remove(); syncHistoryDropdowns(); updateHistoryModalTotal();"><i class="fa fa-trash"></i></button></td>
+        </tr>`;
+        listBody.insertAdjacentHTML('beforeend', html);
+        syncHistoryDropdowns(); updateHistoryModalTotal();
+    }
+
+    function syncHistoryDropdowns() {
+        const dropdowns = document.querySelectorAll('#historyBoxProductList .product-dropdown');
+        const selected = new Set();
+        dropdowns.forEach(dd => { if (dd.value) selected.add(dd.value); });
+        dropdowns.forEach(dd => { Array.from(dd.options).forEach(opt => { if (opt.value !== '') opt.disabled = selected.has(opt.value) && opt.value !== dd.value; }); });
+    }
+
+    function updateHistoryModalTotal() {
+        let total = 0;
+        document.querySelectorAll('#historyBoxProductList tr').forEach(row => {
+            const dropdown = row.querySelector('.product-dropdown');
+            const qtyInput = row.querySelector('.qty-input');
+            const opt = dropdown.options[dropdown.selectedIndex];
+            if (opt && opt.dataset.price) total += parseFloat(opt.dataset.price) * (parseInt(qtyInput.value) || 0);
+        });
+        const totalSpan = document.getElementById('historyModalTotalPrice');
+        if (totalSpan) totalSpan.innerText = `Php ${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    }
+
+    function submitHistoryBoxEntry() {
+        const boxNameInput = document.getElementById('historyModalBoxNameInput');
+        const boxName = boxNameInput ? boxNameInput.value.trim() : '';
+        const boxIdInput = document.getElementById('historyModalBoxId');
+        const boxId = boxIdInput ? boxIdInput.value : '';
+        const sheetId = window.currentHistorySheetId;
+        if (!boxName) { alert('Box name required'); return; }
+        if (!sheetId) { alert('Sheet ID missing. Please refresh and try again.'); return; }
+        const rows = document.querySelectorAll('#historyBoxProductList tr');
+        const formData = new FormData();
+        formData.append('box_name', boxName);
+        formData.append('sheet_id', sheetId);
+        let hasProduct = false;
+        rows.forEach(row => {
+            const select = row.querySelector('.product-dropdown');
+            const qty = row.querySelector('.qty-input');
+            if (select && select.value) {
+                formData.append('product_ids[]', select.value);
+                formData.append('quantities[]', qty ? qty.value : 1);
+                hasProduct = true;
+            }
+        });
+        if (!hasProduct) { alert('Add at least one product'); return; }
+        const url = boxId ? `/update-transaction/${boxId}` : `/add-transaction`;
+        fetch(url, { method: 'POST', body: formData })
+            .then(async res => {
+                const text = await res.text();
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
+                return JSON.parse(text);
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                    $('#historyBoxModal').modal('hide');
+                    fetch(`/get-sheet-transactions/${sheetId}`)
+                        .then(res => res.json())
+                        .then(tdata => renderHistoryTransactionTable(tdata.transactions, sheetId));
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(err => { console.error('Submit error:', err); alert('Failed to save: ' + err.message); });
+    }
+
+    function deleteHistoryTransaction(id, name) {
+        if (!confirm(`Delete box "${name}"?`)) return;
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        fetch(`/delete-transaction/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = document.getElementById(`hist-trans-row-${id}`);
+                    if (row) row.remove();
+                } else {
+                    alert('Delete failed');
+                }
+            });
+    }   
+
+    function openHistoryProductSheet(sheetId, label, canRestore) {
+        currentHistoryProductSheetId = sheetId;
+        fetch(`/get-product-sheet/${sheetId}`).then(res => res.json()).then(data => {
+            renderHistoryProductTable(data.products, sheetId);
+            const sheetLabelSpan = document.getElementById('historyProdSheetLabel');
+            if (sheetLabelSpan) sheetLabelSpan.innerText = label;
+            const restoreBtn = document.getElementById('historyProdRestoreBtn');
+            if (restoreBtn) {
+                if (canRestore) { restoreBtn.style.display = 'inline-block'; restoreBtn.onclick = () => restoreSheet('product', sheetId); } 
+                else restoreBtn.style.display = 'none';
+            }
+            const exportBtn = document.getElementById('historyProdExportExcel');
+            if (exportBtn) exportBtn.onclick = () => window.location.href = `/export-product-sheet/${sheetId}`;
+            $('#historyProductModal').modal('show');
+        });
+    }
+
+    function renderHistoryProductTable(products, sheetId) {
+        const container = document.getElementById('historyProdTableContainer');
+        if (!container) return;
+        if (!products.length) { container.innerHTML = '<p>No products for this sheet.</p>'; return; }
+        let html = `<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Product</th><th>Category</th><th>Price/Unit</th><th>Stock</th><th>Status</th><th>Last Modified</th><th>Action</th></tr></thead><tbody>`;
+        products.forEach(p => {
+            html += `<tr id="hist-prod-row-${p.id}">
+                <td><strong>${escapeHtml(p.name)}</strong></td>
+                <td>${p.category}</td>
+                <td>Php ${p.price} / ${p.unit}</td>
+                <td>${p.stock} ${p.unit}</td>
+                <td><span class="badge ${p.stock>10?'badge-success':p.stock>0?'badge-warning':'badge-danger'}">${p.status}</span></td>
+                <td id="hist-prod-modified-${p.id}">${formatProductDateTime(p.last_modified)}</td>
+                <td>${isAdmin ? `<button class="btn btn-sm btn-primary mr-1" onclick="editHistoryProduct(${p.id}, '${escapeJsString(p.name)}', ${p.price}, ${p.stock}, '${p.category}', '${p.unit}', ${sheetId})"><i class="fa fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="deleteHistoryProduct(${p.id}, '${escapeJsString(p.name)}', ${sheetId})"><i class="fa fa-trash"></i></button>` : 'Read only'}</td>
+            </tr>`;
+        });
+        html += `</tbody>}</div>`;
+        if (isAdmin) html += `<button class="btn btn-primary mt-2" onclick="openAddHistoryProductModal(${sheetId})"><i class="fa fa-plus"></i> Add Product</button>`;
+        container.innerHTML = html;
+    }
+
+    function openAddHistoryProductModal(sheetId) {
+        $('#historyProductModal').modal('hide');
+        const productIdInput = document.getElementById('historyProductId');
+        if (productIdInput) productIdInput.value = '';
+        const nameInput = document.getElementById('historyProdName');
+        if (nameInput) nameInput.value = '';
+        const categorySelect = document.getElementById('historyProdCategory');
+        if (categorySelect) categorySelect.value = 'Smoked';
+        const unitSelect = document.getElementById('historyProdUnit');
+        if (unitSelect) unitSelect.value = 'kg';
+        const priceInput = document.getElementById('historyProdPrice');
+        if (priceInput) priceInput.value = '';
+        const stockInput = document.getElementById('historyProdStock');
+        if (stockInput) stockInput.value = '';
+        const modalTitle = document.getElementById('historyModalProductTitle');
+        if (modalTitle) modalTitle.innerText = 'Add New Product';
+        window.currentHistoryProductSheetId = sheetId;
+        $('#historyProductEditModal').modal('show');
+    }
+
+    function editHistoryProduct(id, name, price, stock, category, unit, sheetId) {
+        const productIdInput = document.getElementById('historyProductId');
+        if (productIdInput) productIdInput.value = id;
+        const nameInput = document.getElementById('historyProdName');
+        if (nameInput) nameInput.value = name;
+        const categorySelect = document.getElementById('historyProdCategory');
+        if (categorySelect) categorySelect.value = category;
+        const unitSelect = document.getElementById('historyProdUnit');
+        if (unitSelect) unitSelect.value = unit;
+        const priceInput = document.getElementById('historyProdPrice');
+        if (priceInput) priceInput.value = price;
+        const stockInput = document.getElementById('historyProdStock');
+        if (stockInput) stockInput.value = stock;
+        const modalTitle = document.getElementById('historyModalProductTitle');
+        if (modalTitle) modalTitle.innerText = 'Edit Product';
+        window.currentHistoryProductSheetId = sheetId;
+        $('#historyProductEditModal').modal('show');
+    }
+
+    function submitHistoryProduct() {
+        const idInput = document.getElementById('historyProductId');
+        const id = idInput ? idInput.value : '';
+        const nameInput = document.getElementById('historyProdName');
+        const name = nameInput ? nameInput.value.trim() : '';
+        const categorySelect = document.getElementById('historyProdCategory');
+        const category = categorySelect ? categorySelect.value : '';
+        const unitSelect = document.getElementById('historyProdUnit');
+        const unit = unitSelect ? unitSelect.value : '';
+        const priceInput = document.getElementById('historyProdPrice');
+        const price = priceInput ? priceInput.value : '';
+        const stockInput = document.getElementById('historyProdStock');
+        const stock = stockInput ? stockInput.value : '';
+        const sheetId = window.currentHistoryProductSheetId;
+        if (!name || !/^[a-zA-Z\s]*$/.test(name)) {
+            alert('Letters only for product name');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('category', category);
+        formData.append('unit', unit);
+        formData.append('price', price);
+        formData.append('stock', stock);
+        formData.append('sheet_id', sheetId);
+        const url = id ? `/update-product/${id}/sheet/${sheetId}` : '/add-product';
+        fetch(url, { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                    $('#historyProductEditModal').modal('hide');
+                    fetch(`/get-product-sheet/${sheetId}`)
+                        .then(res => res.json())
+                        .then(pdata => renderHistoryProductTable(pdata.products, sheetId));
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+    }
+
+    function deleteHistoryProduct(id, name, sheetId) {
+        if (!confirm(`Delete product "${name}"?`)) return;
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        fetch(`/delete-product/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = document.getElementById(`hist-prod-row-${id}`);
+                    if (row) row.remove();
+                } else {
+                    alert('Delete failed');
+                }
+            });
+    }
+
+    $(document).ready(function() {
+        if ($('#historyTransactionModal').length) {
+            const modals = ['#historyTransactionModal', '#historyProductModal', '#historyBoxModal', '#historyProductEditModal'];
+            modals.forEach(sel => {
+                $(sel).on('hide.bs.modal', function () {
+                    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                });
+            });
+
+            $('#historyBoxModal').on('hidden.bs.modal', function () {
+                if (!$('#historyTransactionModal').is(':visible')) $('#historyTransactionModal').modal('show');
+            });
+            $('#historyProductEditModal').on('hidden.bs.modal', function () {
+                if (!$('#historyProductModal').is(':visible')) $('#historyProductModal').modal('show');
+            });
+
+            $('#historyBoxModal').on('show.bs.modal', function() { boxModalOpen = true; startProductListPolling(); })
+                .on('hidden.bs.modal', function() { 
+                    boxModalOpen = false; 
+                    if (!productModalOpen) stopProductListPolling(); 
+                    const listBody = document.getElementById('historyBoxProductList');
+                    if (listBody) listBody.innerHTML = "";
+                    const totalSpan = document.getElementById('historyModalTotalPrice');
+                    if (totalSpan) totalSpan.innerText = "Php 0.00";
+                    const boxNameSpan = document.getElementById('historyModalBoxName');
+                    if (boxNameSpan) boxNameSpan.innerText = "New Box";
+                    const boxNameInput = document.getElementById('historyModalBoxNameInput');
+                    if (boxNameInput) boxNameInput.value = "";
+                    const boxIdInput = document.getElementById('historyModalBoxId');
+                    if (boxIdInput) boxIdInput.value = "";
+                });
+            $('#historyProductEditModal').on('show.bs.modal', function() { productModalOpen = true; startProductListPolling(); })
+                .on('hidden.bs.modal', function() { 
+                    productModalOpen = false; 
+                    if (!boxModalOpen) stopProductListPolling(); 
+                });
+        }
+        
+        const historySection = document.getElementById('history');
+        if (historySection) {
+            const observer = new MutationObserver(() => { 
+                if (historySection && historySection.style && historySection.style.display !== 'none') {
+                    loadHistory();
+                }
+            });
+            observer.observe(historySection, { attributes: true });
+        }
+        const authPaths = ['/login', '/sign-up', '/forgot-password', '/reset-password'];
+        const isAuthPage = authPaths.some(p => window.location.pathname.includes(p));
+        if (!isAuthPage && document.getElementById('history')) {
+            loadHistory();
+        }
+    });
+</script>
+{% endif %}
+</body>
+</html>
