@@ -11,8 +11,15 @@ DB_NAME = "database.db"
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'asdasdasd asdasdasd'
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_NAME}' 
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-this')
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        if 'sslmode' not in database_url:
+            database_url += '?sslmode=require'
+        app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_NAME}' 
+    
     db.init_app(app)
     migrate = Migrate(app, db)
 
