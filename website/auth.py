@@ -95,38 +95,41 @@ def verify_reset_token(token, expiration=3600):
 
 @auth.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    if request.method == 'POST':
-        email = request.form.get('email').strip().lower()
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            flash('No account found with that email address.', 'error')
-            return redirect(url_for('auth.forgot_password'))
+    # TEMPORARY DISABLE: Password reset is disabled to avoid email timeout crashes.
+    flash('Password reset is temporarily disabled. Please contact an administrator.', 'error')
+    return redirect(url_for('auth.login'))
 
-        token = generate_reset_token(email)
-        user.reset_token = token
-        user.token_expiry = datetime.now() + timedelta(hours=1)
-        db.session.commit()
-
-        reset_link = url_for('auth.reset_password', token=token, _external=True)
-
-        # Retrieve the mail instance stored in app extensions
-        mail = current_app.extensions['mail']
-        msg = Message('Password Reset Request', recipients=[email])
-        msg.body = f'''To reset your password, visit the following link:
-{reset_link}
-
-If you did not make this request, simply ignore this email.
-'''
-        try:
-            mail.send(msg)
-            flash('A password reset link has been sent to your email address.', 'success')
-        except Exception as e:
-            flash('Error sending email. Please try again later.', 'error')
-            print(f"Email error: {e}")
-        return redirect(url_for('auth.login'))
-
-    return render_template('forgot_password.html')
-
+    # --- ORIGINAL CODE (commented out) ---
+    # if request.method == 'POST':
+    #     email = request.form.get('email').strip().lower()
+    #     user = User.query.filter_by(email=email).first()
+    #     if not user:
+    #         flash('No account found with that email address.', 'error')
+    #         return redirect(url_for('auth.forgot_password'))
+    #
+    #     token = generate_reset_token(email)
+    #     user.reset_token = token
+    #     user.token_expiry = datetime.now() + timedelta(hours=1)
+    #     db.session.commit()
+    #
+    #     reset_link = url_for('auth.reset_password', token=token, _external=True)
+    #
+    #     mail = current_app.extensions['mail']
+    #     msg = Message('Password Reset Request', recipients=[email])
+    #     msg.body = f'''To reset your password, visit the following link:
+    # {reset_link}
+    #
+    # If you did not make this request, simply ignore this email.
+    # '''
+    #     try:
+    #         mail.send(msg)
+    #         flash('A password reset link has been sent to your email address.', 'success')
+    #     except Exception as e:
+    #         flash('Error sending email. Please try again later.', 'error')
+    #         print(f"Email error: {e}")
+    #     return redirect(url_for('auth.login'))
+    #
+    # return render_template('forgot_password.html')
 
 @auth.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
