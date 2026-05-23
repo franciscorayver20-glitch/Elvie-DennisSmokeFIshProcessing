@@ -79,7 +79,7 @@ class Sheet(db.Model):
     last_modified = db.Column(db.DateTime(timezone=True), default=func.now(), onupdate=func.now())
     # Link to the ProductSheet of the same date
     product_sheet_id = db.Column(db.Integer, db.ForeignKey('product_sheet.id'), nullable=True)
-    transactions = db.relationship('Transaction', backref='sheet', lazy=True)
+    transactions = db.relationship('Transaction', backref='sheet', lazy=True, cascade='all, delete-orphan')
     is_active = db.Column(db.Boolean, default=True)
 
 class Transaction(db.Model):

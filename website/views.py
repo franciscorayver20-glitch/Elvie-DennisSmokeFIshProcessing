@@ -165,7 +165,7 @@ def export_product_sheet(sheet_id):
     sheet_products = SheetProduct.query.filter_by(sheet_id=sheet_id).join(Product).order_by(Product.name.asc()).all()
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = sheet.label[:31]
+    ws.title = sheet.label[:31].replace('/', '-').replace('\\', '-')
     ws.append(["#", "Product Name", "Category", "Price/Unit", "Unit", "Stock", "Status", "Last Modified"])
     for i, sp in enumerate(sheet_products, 1):
         p = sp.product
@@ -536,24 +536,43 @@ def delete_transaction(id):
 def export_sheet(sheet_id):
     import io, openpyxl
     from flask import send_file
+    from openpyxl.styles import Font, PatternFill
+
     sheet = Sheet.query.get_or_404(sheet_id)
     transactions = Transaction.query.filter_by(sheet_id=sheet_id).all()
+
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = sheet.label[:31]
-    ws.append(["#", "Box Name", "Total Qty", "Total Price (Php)", "Status", "Date Issued"])
+
+    # --- Sheet 1: Transactions (main list) ---
+    ws1 = wb.active
+    ws1.title = sheet.label[:31].replace('/', '-').replace('\\', '-')
+    ws1.append(["#", "Box Name", "Total Qty", "Total Price (Php)", "Status", "Date Issued"])
     for i, t in enumerate(transactions, 1):
-        ws.append([i, t.box_name, t.quantity, round(t.total_price,2), t.status, t.date_created.strftime('%Y-%m-%d %H:%M') if t.date_created else ''])
-    from openpyxl.styles import Font, PatternFill
-    for cell in ws[1]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="1F2937")
+        ws1.append([i, t.box_name, t.quantity, round(t.total_price, 2), t.status,
+                    t.date_created.strftime('%Y-%m-%d %H:%M') if t.date_created else ''])
+
+    # --- Sheet 2: Products inside each box ---
+    ws2 = wb.create_sheet("Products in Boxes")
+    ws2.append(["Box Name", "Product Name", "Quantity", "Unit Price", "Total"])
+    for t in transactions:
+        for item in t.items:
+            total = item.quantity * item.unit_price
+            ws2.append([t.box_name, item.product.name, item.quantity,
+                        round(item.unit_price, 2), round(total, 2)])
+
+    # Style headers for both sheets
+    for ws in [ws1, ws2]:
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="1F2937")
+
+    # Save and send file
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     filename = f"{sheet.label.replace('/', '-')}.xlsx"
-    return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 # ==================== PERSONNEL ROUTES ====================
 
@@ -857,3 +876,39 @@ def get_product_sheet_id_by_date():
     if not product_sheet:
         product_sheet = ProductSheet.query.filter_by(date=date_str).first()
     return jsonify({"product_sheet_id": product_sheet.id if product_sheet else None})
+
+
+# ==================== PERMANENT DELETE FOR ARCHIVED SHEETS ====================
+
+@views.route('/delete-archived-sheet/<int:sheet_id>', methods=['DELETE'])
+@login_required
+def delete_archived_sheet(sheet_id):
+    if not current_user.is_admin:
+        return jsonify({"status": "error", "message": "Access denied."}), 403
+    sheet = Sheet.query.get(sheet_id)
+    if not sheet:
+        return jsonify({"status": "error", "message": "Sheet not found."}), 404
+    try:
+        db.session.delete(sheet)          # Cascade will delete transactions and items
+        db.session.commit()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+@views.route('/delete-archived-product-sheet/<int:sheet_id>', methods=['DELETE'])
+@login_required
+def delete_archived_product_sheet(sheet_id):
+    if not current_user.is_admin:
+        return jsonify({"status": "error", "message": "Access denied."}), 403
+    sheet = ProductSheet.query.get(sheet_id)
+    if not sheet:
+        return jsonify({"status": "error", "message": "Product sheet not found."}), 404
+    try:
+        # Delete related sheet_products and snapshots (cascade should handle)
+        db.session.delete(sheet)
+        db.session.commit()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500

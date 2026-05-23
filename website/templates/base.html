@@ -270,49 +270,112 @@
     function stopProductListPolling() { if (productListRefreshInterval) { clearInterval(productListRefreshInterval); productListRefreshInterval = null; } }
 
     function loadHistory() {
-        fetch('/get-archived-sheets').then(res => res.json()).then(data => {
-            const transDiv = document.getElementById('history-transaction-buttons');
-            const prodDiv = document.getElementById('history-product-buttons');
-            if (!transDiv || !prodDiv) return;
-            transDiv.innerHTML = '';
-            prodDiv.innerHTML = '';
-            const todayStr = new Date().toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric'});
-            
+    fetch('/get-archived-sheets').then(res => res.json()).then(data => {
+        const transDiv = document.getElementById('history-transaction-buttons');
+        const prodDiv = document.getElementById('history-product-buttons');
+        if (!transDiv || !prodDiv) return;
+        transDiv.innerHTML = '';
+        prodDiv.innerHTML = '';
+        const todayStr = new Date().toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric'});
+
+        // --- Transaction sheets (with delete button if admin) ---
+        if (data.transaction_sheets.length) {
             data.transaction_sheets.forEach(sheet => {
-                if (!sheet.id) return;
-                const btn = document.createElement('button');
-                btn.className = 'btn btn-outline-primary btn-sm';
-                btn.innerHTML = `<i class="fa fa-file-excel-o mr-1"></i> ${sheet.label}`;
-                btn.onclick = () => openHistoryTransactionSheet(sheet.id, sheet.label, sheet.date === todayStr);
-                btn.oncontextmenu = (e) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'd-flex align-items-center mb-2';
+
+                const restoreBtn = document.createElement('button');
+                restoreBtn.className = 'btn btn-outline-primary btn-sm flex-grow-1';
+                restoreBtn.innerHTML = `<i class="fa fa-file-excel-o mr-1"></i> ${sheet.label}`;
+                restoreBtn.onclick = () => openHistoryTransactionSheet(sheet.id, sheet.label, sheet.date === todayStr);
+                restoreBtn.oncontextmenu = (e) => {
                     e.preventDefault();
                     if (confirm(`Restore archived transaction sheet "${sheet.label}" to dashboard?`))
                         restoreSheet('transaction', sheet.id);
                 };
-                transDiv.appendChild(btn);
+                wrapper.appendChild(restoreBtn);
+
+                if (isAdmin) {
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-outline-danger btn-sm ml-2';
+                    delBtn.innerHTML = '<i class="fa fa-trash"></i>';
+                    delBtn.title = 'Permanently delete this sheet';
+                    delBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to delete "${sheet.label}"?\nAll transactions and box entries will be lost.\nThis cannot be undone.`)) {
+                            fetch(`/delete-archived-sheet/${sheet.id}`, { method: 'DELETE' })
+                                .then(res => res.json())
+                                .then(data => {
+                                    if (data.status === 'success') {
+                                        wrapper.remove();
+                                        // Reload the list to keep consistency
+                                        loadHistory();
+                                    } else {
+                                        alert('Delete failed: ' + data.message);
+                                    }
+                                })
+                                .catch(err => alert('Error deleting sheet: ' + err));
+                        }
+                    };
+                    wrapper.appendChild(delBtn);
+                }
+                transDiv.appendChild(wrapper);
             });
-            if (!data.transaction_sheets.length) transDiv.innerHTML = '<div class="text-muted">No archived transaction sheets.</div>';
-            
+        } else {
+            transDiv.innerHTML = '<div class="text-muted">No archived transaction sheets.</div>';
+        }
+
+        // --- Product sheets (with delete button if admin) ---
+        if (data.product_sheets.length) {
             data.product_sheets.forEach(sheet => {
-                const btn = document.createElement('button');
-                btn.className = 'btn btn-outline-success btn-sm';
-                btn.innerHTML = `<i class="fa fa-file-excel-o mr-1"></i> ${sheet.label}`;
-                btn.onclick = () => openHistoryProductSheet(sheet.id, sheet.label, sheet.date === todayStr);
-                btn.oncontextmenu = (e) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'd-flex align-items-center mb-2';
+
+                const restoreBtn = document.createElement('button');
+                restoreBtn.className = 'btn btn-outline-success btn-sm flex-grow-1';
+                restoreBtn.innerHTML = `<i class="fa fa-file-excel-o mr-1"></i> ${sheet.label}`;
+                restoreBtn.onclick = () => openHistoryProductSheet(sheet.id, sheet.label, sheet.date === todayStr);
+                restoreBtn.oncontextmenu = (e) => {
                     e.preventDefault();
                     if (confirm(`Restore archived product sheet "${sheet.label}" to dashboard?`))
                         restoreSheet('product', sheet.id);
                 };
-                prodDiv.appendChild(btn);
+                wrapper.appendChild(restoreBtn);
+
+                if (isAdmin) {
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-outline-danger btn-sm ml-2';
+                    delBtn.innerHTML = '<i class="fa fa-trash"></i>';
+                    delBtn.title = 'Permanently delete this sheet';
+                    delBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm(`⚠️ PERMANENT DELETE\n\nDelete "${sheet.label}"?\nAll product stock records will be lost.\nThis cannot be undone.`)) {
+                            fetch(`/delete-archived-product-sheet/${sheet.id}`, { method: 'DELETE' })
+                                .then(res => res.json())
+                                .then(data => {
+                                    if (data.status === 'success') {
+                                        wrapper.remove();
+                                        loadHistory();
+                                    } else {
+                                        alert('Delete failed: ' + data.message);
+                                    }
+                                });
+                        }
+                    };
+                    wrapper.appendChild(delBtn);
+                }
+                prodDiv.appendChild(wrapper);
             });
-            if (!data.product_sheets.length) prodDiv.innerHTML = '<div class="text-muted">No archived product sheets.</div>';
-            
-            const transLoading = document.getElementById('history-transaction-loading');
-            const prodLoading = document.getElementById('history-product-loading');
-            if (transLoading) transLoading.style.display = 'none';
-            if (prodLoading) prodLoading.style.display = 'none';
-        });
-    }
+        } else {
+            prodDiv.innerHTML = '<div class="text-muted">No archived product sheets.</div>';
+        }
+
+        const transLoading = document.getElementById('history-transaction-loading');
+        const prodLoading = document.getElementById('history-product-loading');
+        if (transLoading) transLoading.style.display = 'none';
+        if (prodLoading) prodLoading.style.display = 'none';
+    });
+}
 
     function restoreSheet(type, sheetId) {
         const url = type === 'transaction' ? `/restore-sheet/${sheetId}` : `/restore-product-sheet/${sheetId}`;
